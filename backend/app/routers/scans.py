@@ -1,9 +1,10 @@
+import json
 import uuid
 from datetime import datetime
 import stripe
 from fastapi import APIRouter, HTTPException
 from app.database import database, scans, rate_limits
-from app.models import ScanCreate, ScanResponse
+from app.models import ScanCreate, ScanResponse, ScanResults, ScanResultFinding
 from app.config import settings
 
 stripe.api_key = settings.stripe_secret_key
@@ -130,3 +131,71 @@ async def create_checkout(scan_id: str, tier: str):
     )
 
     return {"checkout_url": session.url}
+
+
+def calculate_risk_level(findings: list) -> str:
+    """Calculate overall risk level from findings."""
+    if not findings:
+        return "Clean"
+
+    severities = [f.get("severity", "Low") for f in findings]
+
+    if "Critical" in severities:
+        return "Critical"
+    if "High" in severities:
+        return "High"
+    if "Medium" in severities:
+        return "Medium"
+    return "Low"
+
+
+def filter_findings_for_tier(findings: list, paid_tier: str | None) -> list:
+    """Filter finding details based on paid tier."""
+    filtered = []
+
+    for f in findings:
+        finding = {
+            "title": f.get("title", "Unknown Issue"),
+            "severity": f.get("severity", "Medium"),
+            "endpoint": f.get("endpoint", "N/A"),
+            "impact": f.get("impact", "Potential security issue"),
+            "owasp_category": f.get("owasp_category") if paid_tier else None,
+        }
+
+        # Only include details if paid
+        if paid_tier in ("unlock", "deep"):
+            finding["reproduction_steps"] = f.get("reproduction_steps")
+            finding["poc"] = f.get("poc")
+            finding["fix_guidance"] = f.get("fix_guidance")
+
+        filtered.append(ScanResultFinding(**finding))
+
+    return filtered
+
+
+@router.get("/{scan_id}/results", response_model=ScanResults)
+async def get_scan_results(scan_id: str):
+    query = scans.select().where(scans.c.id == scan_id)
+    scan = await database.fetch_one(query)
+
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    if scan["status"] != "completed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Scan not completed. Status: {scan['status']}"
+        )
+
+    results = json.loads(scan["results_json"]) if scan["results_json"] else {}
+    findings = results.get("findings", [])
+
+    return ScanResults(
+        scan_id=scan_id,
+        target_url=scan["target_url"],
+        risk_level=calculate_risk_level(findings),
+        findings=filter_findings_for_tier(findings, scan["paid_tier"]),
+        scan_type=scan["scan_type"],
+        completed_at=scan["completed_at"],
+        paid_tier=scan["paid_tier"],
+    )
