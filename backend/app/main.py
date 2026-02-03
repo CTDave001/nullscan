@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import database
-from app.routers import scans
+from app.routers import scans, webhooks
 
 app = FastAPI(title="Argus API")
 
@@ -14,6 +14,7 @@ app.add_middleware(
 )
 
 app.include_router(scans.router)
+app.include_router(webhooks.router)
 
 
 @app.on_event("startup")

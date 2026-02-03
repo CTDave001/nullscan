@@ -1,8 +1,17 @@
 import uuid
 from datetime import datetime
+import stripe
 from fastapi import APIRouter, HTTPException
 from app.database import database, scans, rate_limits
 from app.models import ScanCreate, ScanResponse
+from app.config import settings
+
+stripe.api_key = settings.stripe_secret_key
+
+PRICE_TIERS = {
+    "unlock": 14900,  # $149.00 in cents
+    "deep": 39900,    # $399.00 in cents
+}
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 
@@ -81,3 +90,43 @@ async def get_scan(scan_id: str):
         raise HTTPException(status_code=404, detail="Scan not found")
 
     return ScanResponse(**dict(result))
+
+
+@router.post("/{scan_id}/checkout")
+async def create_checkout(scan_id: str, tier: str):
+    if tier not in PRICE_TIERS:
+        raise HTTPException(status_code=400, detail="Invalid tier")
+
+    query = scans.select().where(scans.c.id == scan_id)
+    scan = await database.fetch_one(query)
+
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    if scan["paid_tier"]:
+        raise HTTPException(status_code=400, detail="Already paid")
+
+    session = stripe.checkout.Session.create(
+        payment_method_types=["card"],
+        line_items=[{
+            "price_data": {
+                "currency": "usd",
+                "product_data": {
+                    "name": f"Security Report - {tier.title()}",
+                    "description": f"Full security report for {scan['target_url']}",
+                },
+                "unit_amount": PRICE_TIERS[tier],
+            },
+            "quantity": 1,
+        }],
+        mode="payment",
+        success_url=f"{settings.frontend_url}/results/{scan_id}/full?success=true",
+        cancel_url=f"{settings.frontend_url}/results/{scan_id}?cancelled=true",
+        metadata={
+            "scan_id": scan_id,
+            "tier": tier,
+        },
+        customer_email=scan["email"],
+    )
+
+    return {"checkout_url": session.url}
