@@ -1,0 +1,36 @@
+import databases
+import sqlalchemy
+from app.config import settings
+
+database = databases.Database(settings.database_url)
+metadata = sqlalchemy.MetaData()
+
+scans = sqlalchemy.Table(
+    "scans",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.String(36), primary_key=True),
+    sqlalchemy.Column("email", sqlalchemy.String(255), nullable=False),
+    sqlalchemy.Column("target_url", sqlalchemy.String(2048), nullable=False),
+    sqlalchemy.Column("status", sqlalchemy.String(20), default="pending"),
+    sqlalchemy.Column("scan_type", sqlalchemy.String(20), default="quick"),
+    sqlalchemy.Column("results_json", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, server_default=sqlalchemy.func.now()),
+    sqlalchemy.Column("completed_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("paid_tier", sqlalchemy.String(20), nullable=True),
+    sqlalchemy.Column("stripe_payment_id", sqlalchemy.String(255), nullable=True),
+    sqlalchemy.Column("retry_count", sqlalchemy.Integer, default=0),
+)
+
+rate_limits = sqlalchemy.Table(
+    "rate_limits",
+    metadata,
+    sqlalchemy.Column("email", sqlalchemy.String(255), primary_key=True),
+    sqlalchemy.Column("scan_count", sqlalchemy.Integer, default=0),
+    sqlalchemy.Column("month", sqlalchemy.String(7)),  # YYYY-MM
+)
+
+engine = sqlalchemy.create_engine(
+    settings.database_url.replace("sqlite:///", "sqlite:///"),
+    connect_args={"check_same_thread": False}
+)
+metadata.create_all(engine)
