@@ -1,12 +1,14 @@
-# Security Scanner SaaS - MVP Implementation Plan
+# Argus — MVP Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build a SaaS that lets founders scan their apps for security issues using Strix, with free quick scans and paid deep analysis.
+**Goal:** Build Argus — a SaaS that lets founders scan their apps for security issues using Strix, with free quick scans and paid deep analysis.
 
 **Architecture:** FastAPI backend handles scan submission, job queue, and Stripe webhooks. Next.js frontend provides landing page, scan status, and results pages. Background worker polls DB for pending scans and invokes Strix CLI. Email notifications via Resend.
 
 **Tech Stack:** Python/FastAPI, Next.js/Tailwind/shadcn, SQLite, Resend, Stripe, Docker (for Strix)
+
+**Brand:** Dark charcoal (#18181b) + bronze gold (#d4a853) accent. Premium, protective feel.
 
 ---
 
@@ -69,7 +71,7 @@ settings = Settings()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Security Scanner API")
+app = FastAPI(title="Argus API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -206,7 +208,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import database
 
-app = FastAPI(title="Security Scanner API")
+app = FastAPI(title="Argus API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -359,7 +361,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import database
 from app.routers import scans
 
-app = FastAPI(title="Security Scanner API")
+app = FastAPI(title="Argus API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -648,7 +650,7 @@ async def send_scan_started_email(email: str, scan_id: str, target_url: str):
         return
 
     resend.Emails.send({
-        "from": "Security Scanner <noreply@yourdomain.com>",
+        "from": "Argus <noreply@yourdomain.com>",
         "to": email,
         "subject": f"Scanning {target_url}",
         "html": f"""
@@ -683,7 +685,7 @@ async def send_scan_complete_email(
         findings_text = "No obvious issues were detected in the quick scan."
 
     resend.Emails.send({
-        "from": "Security Scanner <noreply@yourdomain.com>",
+        "from": "Argus <noreply@yourdomain.com>",
         "to": email,
         "subject": subject,
         "html": f"""
@@ -708,7 +710,7 @@ async def send_scan_failed_email(email: str, scan_id: str):
         return
 
     resend.Emails.send({
-        "from": "Security Scanner <noreply@yourdomain.com>",
+        "from": "Argus <noreply@yourdomain.com>",
         "to": email,
         "subject": "Security scan failed",
         "html": f"""
@@ -731,7 +733,7 @@ async def send_deep_scan_started_email(email: str, scan_id: str, target_url: str
         return
 
     resend.Emails.send({
-        "from": "Security Scanner <noreply@yourdomain.com>",
+        "from": "Argus <noreply@yourdomain.com>",
         "to": email,
         "subject": f"Deep analysis started for {target_url}",
         "html": f"""
@@ -750,7 +752,7 @@ async def send_payment_received_email(email: str, scan_id: str, tier: str):
         return
 
     resend.Emails.send({
-        "from": "Security Scanner <noreply@yourdomain.com>",
+        "from": "Argus <noreply@yourdomain.com>",
         "to": email,
         "subject": "Payment received - Full report unlocked",
         "html": f"""
@@ -1194,7 +1196,11 @@ export function ScanForm() {
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      <Button type="submit" className="w-full" disabled={loading || !consent}>
+      <Button
+        type="submit"
+        className="w-full bg-[#d4a853] hover:bg-[#c9a227] text-[#18181b] font-semibold"
+        disabled={loading || !consent}
+      >
         {loading ? "Starting scan..." : "Scan your app free"}
       </Button>
     </form>
@@ -1202,24 +1208,23 @@ export function ScanForm() {
 }
 ```
 
-**Step 2: Update page.tsx**
+**Step 2: Update page.tsx with Argus branding**
 
 ```tsx
 import { ScanForm } from "@/components/scan-form";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+    <main className="min-h-screen bg-[#18181b] text-[#fafafa]">
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20 text-center">
-        <h1 className="text-5xl font-bold tracking-tight text-slate-900 mb-4">
+        <h1 className="text-5xl font-bold tracking-tight mb-4">
           See what attackers see
           <br />
-          <span className="text-blue-600">before they do</span>
+          <span className="text-[#d4a853]">before they do</span>
         </h1>
-        <p className="text-xl text-slate-600 mb-8 max-w-2xl mx-auto">
-          Automated external security scan for your app. Results in minutes, not
-          weeks.
+        <p className="text-xl text-[#a1a1aa] mb-8 max-w-2xl mx-auto">
+          You ship fast. Argus makes sure you ship safe.
         </p>
 
         <div className="flex justify-center">
@@ -1232,29 +1237,29 @@ export default function Home() {
         <h2 className="text-3xl font-bold text-center mb-12">How it works</h2>
         <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
           <div className="text-center">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-blue-600 font-bold">1</span>
+            <div className="w-12 h-12 bg-[#27272a] border border-[#d4a853] rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-[#d4a853] font-bold">1</span>
             </div>
             <h3 className="font-semibold mb-2">Submit your URL</h3>
-            <p className="text-slate-600">
+            <p className="text-[#a1a1aa]">
               Enter your app URL and email. We only test public endpoints.
             </p>
           </div>
           <div className="text-center">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-blue-600 font-bold">2</span>
+            <div className="w-12 h-12 bg-[#27272a] border border-[#d4a853] rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-[#d4a853] font-bold">2</span>
             </div>
-            <h3 className="font-semibold mb-2">We scan</h3>
-            <p className="text-slate-600">
+            <h3 className="font-semibold mb-2">Argus scans</h3>
+            <p className="text-[#a1a1aa]">
               Our AI-powered scanner checks for common vulnerabilities.
             </p>
           </div>
           <div className="text-center">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-blue-600 font-bold">3</span>
+            <div className="w-12 h-12 bg-[#27272a] border border-[#d4a853] rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-[#d4a853] font-bold">3</span>
             </div>
             <h3 className="font-semibold mb-2">Get results</h3>
-            <p className="text-slate-600">
+            <p className="text-[#a1a1aa]">
               Receive a report with findings and fix guidance.
             </p>
           </div>
@@ -1262,23 +1267,23 @@ export default function Home() {
       </section>
 
       {/* Pricing */}
-      <section className="container mx-auto px-4 py-16 bg-slate-50">
+      <section className="container mx-auto px-4 py-16 bg-[#27272a] rounded-lg">
         <h2 className="text-3xl font-bold text-center mb-12">Pricing</h2>
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-          <div className="bg-white p-6 rounded-lg border">
+          <div className="bg-[#18181b] p-6 rounded-lg border border-[#3f3f46]">
             <h3 className="font-semibold text-lg mb-2">Free Scan</h3>
             <p className="text-3xl font-bold mb-4">$0</p>
-            <ul className="space-y-2 text-slate-600 text-sm">
+            <ul className="space-y-2 text-[#a1a1aa] text-sm">
               <li>Quick external scan</li>
               <li>Finding titles and severity</li>
               <li>Affected endpoints</li>
-              <li className="text-slate-400">Details locked</li>
+              <li className="text-[#52525b]">Details locked</li>
             </ul>
           </div>
-          <div className="bg-white p-6 rounded-lg border border-blue-200 ring-2 ring-blue-100">
-            <h3 className="font-semibold text-lg mb-2">Unlock Report</h3>
+          <div className="bg-[#18181b] p-6 rounded-lg border-2 border-[#d4a853]">
+            <h3 className="font-semibold text-lg mb-2 text-[#d4a853]">Unlock Report</h3>
             <p className="text-3xl font-bold mb-4">$149</p>
-            <ul className="space-y-2 text-slate-600 text-sm">
+            <ul className="space-y-2 text-[#a1a1aa] text-sm">
               <li>Everything in Free</li>
               <li>Reproduction steps</li>
               <li>Proof-of-concept code</li>
@@ -1286,10 +1291,10 @@ export default function Home() {
               <li>PDF export</li>
             </ul>
           </div>
-          <div className="bg-white p-6 rounded-lg border">
+          <div className="bg-[#18181b] p-6 rounded-lg border border-[#3f3f46]">
             <h3 className="font-semibold text-lg mb-2">Deep Analysis</h3>
             <p className="text-3xl font-bold mb-4">$399</p>
-            <ul className="space-y-2 text-slate-600 text-sm">
+            <ul className="space-y-2 text-[#a1a1aa] text-sm">
               <li>Everything in Unlock</li>
               <li>1-4 hour deep scan</li>
               <li>Executive summary</li>
@@ -1301,15 +1306,15 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="container mx-auto px-4 py-8 text-center text-slate-500 text-sm">
+      <footer className="container mx-auto px-4 py-8 text-center text-[#a1a1aa] text-sm">
         <div className="space-x-4">
-          <a href="/scope" className="hover:text-slate-700">
+          <a href="/scope" className="hover:text-[#d4a853]">
             What we test
           </a>
-          <a href="/terms" className="hover:text-slate-700">
+          <a href="/terms" className="hover:text-[#d4a853]">
             Terms
           </a>
-          <a href="/privacy" className="hover:text-slate-700">
+          <a href="/privacy" className="hover:text-[#d4a853]">
             Privacy
           </a>
         </div>

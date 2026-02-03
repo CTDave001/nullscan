@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd MVP design document for security testing SaaS\n\nDefines the complete product design:\n- Black-box external security testing on Strix\n- Two-phase scanning: free quick scan -> paid deep analysis\n- Pricing: Free / $149 unlock / $399 deep + certificate\n- Tech stack: FastAPI + Next.js + Tailwind + SQLite + Stripe\n- Target: early-stage SaaS/AI founders\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd detailed MVP implementation plan\n\n14 bite-sized tasks covering:\n- Backend: FastAPI, database, scan API, worker, email, Stripe\n- Frontend: Next.js, landing page, scan status, results page\n- DevOps: Docker, Railway, Vercel configuration\n\nEach task has step-by-step instructions with complete code.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd Argus branding to design and implementation docs\n\n- Name: Argus \\(Greek all-seeing guardian\\)\n- Colors: Dark charcoal \\(#18181b\\) + bronze gold \\(#d4a853\\)\n- Voice: Confident, friendly, direct - not fear-based\n- Updated landing page design with new color scheme\n- Updated email templates with Argus branding\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+    ]
+  }
+}

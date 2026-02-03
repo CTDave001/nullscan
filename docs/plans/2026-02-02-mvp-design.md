@@ -1,4 +1,84 @@
-# MVP Design: Black-Box Security Testing SaaS
+# Argus — MVP Design
+
+## Branding
+
+### Name & Identity
+
+| Element | Decision |
+|---------|----------|
+| **Name** | Argus |
+| **Origin** | Greek mythology — Argus Panoptes, the all-seeing giant with 100 eyes |
+| **Meaning** | The ultimate guardian, the watcher who sees everything |
+| **Tagline** | "See what attackers see — before they do" |
+
+### Voice & Tone
+
+**Personality:** Confident, friendly, direct — not fear-based
+
+| Do | Don't |
+|----|-------|
+| "Your scan found 3 issues" | "YOUR APP IS VULNERABLE" |
+| "No obvious issues — nice work" | "You passed! You're safe!" |
+| "Here's what to fix" | "CRITICAL DANGER" |
+| Direct, helpful | Preachy, manipulative |
+
+**Example copy:**
+- **Headline:** "See what attackers see — before they do"
+- **Subhead:** "You ship fast. Argus makes sure you ship safe."
+- **CTA:** "Scan your app free"
+- **Nothing found:** "Quick scan complete. No obvious issues detected."
+
+### Visual Design
+
+**Direction:** Dark & premium with bronze gold accent — sophisticated, not aggressive
+
+**Color Palette:**
+
+```
+Background:    #18181b (rich charcoal)
+Surface:       #27272a (lighter charcoal)
+Text:          #fafafa (off-white)
+Muted text:    #a1a1aa (gray)
+Gold accent:   #d4a853 (warm bronze gold)
+Gold hover:    #c9a227 (slightly darker)
+Critical:      #ef4444 (red)
+High:          #f97316 (orange)
+Medium:        #f59e0b (amber)
+Low:           #3b82f6 (blue)
+Clean:         #22c55e (green)
+```
+
+**Where gold appears:**
+- Logo
+- Primary buttons and CTAs
+- "Unlock" and "Upgrade" buttons
+- Premium tier highlights
+- Certificate badge ("Verified by Argus")
+- Key accents (borders, icons, hover states)
+
+**Where gold does NOT appear:**
+- Body text
+- Backgrounds
+- Severity badges (use standard colors)
+
+**Typography:**
+- Clean, modern sans-serif (Inter, or system fonts)
+- No ornate or "Greek-themed" fonts
+
+**Feel:**
+- Premium, protective, sophisticated
+- Like a modern security guardian, not a hacker tool
+- Stands out from typical blue/green SaaS
+
+### Domain Options
+
+Priority order:
+1. `argus.security` — Premium, professional
+2. `getargus.com` — Safe, proven pattern
+3. `argus.sh` — Dev-friendly, short
+4. `withargus.com` — Partnership feel
+
+---
 
 ## Overview & Goals
 
@@ -89,7 +169,7 @@
 ### "Nothing found" scenarios:
 
 - **Quick scan, nothing found:** Show "No obvious issues detected" + upsell deep scan only (skip $149 tier since nothing to unlock)
-- **Deep scan, nothing found:** Deliver certificate "Verified Secure by [Product]" — this is the value
+- **Deep scan, nothing found:** Deliver certificate "Verified Secure by Argus" — this is the value
 
 ### Payment flow:
 
@@ -375,7 +455,11 @@ Week 2:
 
 ## Summary
 
+**Product:** Argus — automated black-box security testing for fast-moving founders
+
 **What you're building:** A SaaS that lets founders scan their apps for security issues. Powered by Strix. Black-box only. Two-phase: free quick scan → paid deep analysis.
+
+**Brand:** Dark charcoal + bronze gold. Premium, protective, stands out.
 
 **Stack:** FastAPI + Next.js + Tailwind/shadcn + SQLite + Resend + Stripe + Railway/Vercel
 
