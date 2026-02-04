@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
+import { Lock, Check, Copy, CheckCheck } from "lucide-react";
 
 interface Finding {
   title: string;
@@ -26,19 +26,29 @@ interface ScanResults {
 }
 
 const severityColors: Record<string, string> = {
-  Critical: "bg-red-500",
-  High: "bg-orange-500",
-  Medium: "bg-yellow-500",
-  Low: "bg-blue-500",
+  Critical: "var(--severity-critical)",
+  High: "var(--severity-high)",
+  Medium: "var(--severity-medium)",
+  Low: "var(--severity-low)",
 };
 
-const riskColors: Record<string, string> = {
-  Critical: "text-red-600 bg-red-50 border-red-200",
-  High: "text-orange-600 bg-orange-50 border-orange-200",
-  Medium: "text-yellow-600 bg-yellow-50 border-yellow-200",
-  Low: "text-blue-600 bg-blue-50 border-blue-200",
-  Clean: "text-green-600 bg-green-50 border-green-200",
+const riskBadgeColors: Record<string, string> = {
+  Critical: "bg-[var(--severity-critical)] text-white",
+  High: "bg-[var(--severity-high)] text-white",
+  Medium: "bg-[var(--severity-medium)] text-black",
+  Low: "bg-[var(--severity-low)] text-white",
+  Clean: "bg-[var(--success)] text-white",
 };
+
+const ATTACK_CATEGORIES = [
+  "SQL Injection",
+  "Cross-Site Scripting",
+  "Authentication Bypass",
+  "IDOR / Access Control",
+  "SSRF",
+  "Directory Traversal",
+  "Security Headers",
+];
 
 export default function ResultsPage() {
   const params = useParams();
@@ -46,6 +56,7 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -86,21 +97,32 @@ export default function ResultsPage() {
     }
   };
 
+  const copyToClipboard = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full" />
+      <main className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
       </main>
     );
   }
 
   if (error) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-4">
-        <Card className="p-8 text-center max-w-md">
-          <h1 className="text-xl font-semibold text-red-600 mb-2">Error</h1>
-          <p className="text-slate-600">{error}</p>
-        </Card>
+      <main className="min-h-screen bg-[var(--bg)]">
+        <Navbar />
+        <div className="pt-24 flex items-center justify-center p-4">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-8 text-center max-w-md">
+            <h1 className="text-xl font-semibold text-[var(--severity-critical)] mb-2">
+              Error
+            </h1>
+            <p className="text-[var(--text-muted)]">{error}</p>
+          </div>
+        </div>
       </main>
     );
   }
@@ -108,147 +130,247 @@ export default function ResultsPage() {
   if (!results) return null;
 
   const isPaid = results.paid_tier !== null;
-  const showUnlockTier = results.findings.length > 0 && !isPaid;
-  const showDeepTier = !isPaid || results.paid_tier === "unlock";
+  const showUnlockCTA = results.findings.length > 0 && !isPaid;
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <Card className={`p-6 mb-6 border-2 ${riskColors[results.risk_level]}`}>
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-xl font-semibold mb-1">
-                Scan complete for{" "}
-                <span className="font-mono">{results.target_url}</span>
-              </h1>
-              <p className="text-slate-600">
-                {results.findings.length} issue
-                {results.findings.length !== 1 ? "s" : ""} found
-              </p>
-            </div>
-            <Badge
-              className={`${severityColors[results.risk_level] || "bg-green-500"} text-white`}
-            >
-              {results.risk_level}
-            </Badge>
-          </div>
-        </Card>
+    <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+      <Navbar />
 
+      {/* Header banner */}
+      <div className="pt-16 bg-[var(--surface)] border-b border-[var(--border)]">
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-1">
+                Scan Report
+              </p>
+              <p className="font-mono text-lg">{results.target_url}</p>
+            </div>
+            <div
+              className={`px-4 py-2 rounded-lg text-sm font-bold uppercase ${
+                riskBadgeColors[results.risk_level] || riskBadgeColors.Clean
+              }`}
+            >
+              {results.risk_level} Risk
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats strip */}
+      <div className="bg-[var(--surface)] border-b border-[var(--border)]">
+        <div className="max-w-4xl mx-auto px-4 py-3">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[13px] font-mono text-[var(--text-muted)]">
+            <span>
+              <span className="text-[var(--text)]">
+                {results.findings.length}
+              </span>{" "}
+              findings
+            </span>
+            <span className="text-[var(--text-dim)]">·</span>
+            <span>
+              <span className="text-[var(--text)]">7</span> attack categories
+            </span>
+            <span className="text-[var(--text-dim)]">·</span>
+            <span>{results.scan_type} scan</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Findings */}
         {results.findings.length === 0 ? (
-          <Card className="p-6 text-center">
-            <h2 className="text-lg font-semibold text-green-600 mb-2">
-              No obvious issues detected
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-8 text-center mb-8">
+            <div className="w-12 h-12 rounded-full bg-[var(--success)]/10 flex items-center justify-center mx-auto mb-4">
+              <Check className="text-[var(--success)]" size={24} />
+            </div>
+            <h2 className="text-xl font-semibold text-[var(--success)] mb-2">
+              No vulnerabilities detected
             </h2>
-            <p className="text-slate-600 mb-4">
-              The quick scan didn&apos;t find any obvious vulnerabilities. Want
-              to go deeper?
+            <p className="text-[var(--text-secondary)] mb-6">
+              Your application passed all tests in the {results.scan_type} scan.
             </p>
-          </Card>
-        ) : (
-          <div className="space-y-4 mb-6">
-            {results.findings.map((finding, i) => (
-              <Card key={i} className="p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-semibold">{finding.title}</h3>
-                  <Badge
-                    className={`${severityColors[finding.severity]} text-white`}
+
+            <div className="max-w-xs mx-auto">
+              <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">
+                Categories Tested
+              </p>
+              <div className="space-y-2">
+                {ATTACK_CATEGORIES.map((cat) => (
+                  <div
+                    key={cat}
+                    className="flex items-center gap-2 text-sm text-[var(--text-secondary)]"
                   >
-                    {finding.severity}
-                  </Badge>
+                    <Check size={14} className="text-[var(--success)]" />
+                    {cat}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4 mb-8">
+            {results.findings.map((finding, i) => {
+              const color = severityColors[finding.severity] || severityColors.Low;
+              return (
+                <div
+                  key={i}
+                  className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden"
+                >
+                  {/* Severity color bar */}
+                  <div className="flex">
+                    <div
+                      className="w-1 shrink-0"
+                      style={{ backgroundColor: color }}
+                    />
+                    <div className="flex-1 p-5">
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-4 mb-3">
+                        <h3 className="font-semibold">{finding.title}</h3>
+                        <span
+                          className="shrink-0 text-[11px] font-bold uppercase px-2 py-0.5 rounded border"
+                          style={{
+                            backgroundColor: `${color}20`,
+                            color: color,
+                            borderColor: `${color}30`,
+                          }}
+                        >
+                          {finding.severity}
+                        </span>
+                      </div>
+
+                      {/* Endpoint */}
+                      <p className="font-mono text-[13px] text-[var(--accent)] mb-3">
+                        {finding.endpoint}
+                      </p>
+
+                      {/* Impact - always visible */}
+                      <p className="text-sm text-[var(--text-secondary)] mb-4">
+                        {finding.impact}
+                      </p>
+
+                      {/* Locked content for free tier */}
+                      {!isPaid && (
+                        <div className="relative bg-[var(--surface-raised)] rounded-lg p-4 mt-4">
+                          {/* Blurred fake content */}
+                          <div className="blur-sm select-none pointer-events-none text-sm text-[var(--text-muted)] space-y-2 mb-4">
+                            <p>
+                              1. Send a POST request to the endpoint with the
+                              following payload...
+                            </p>
+                            <p>
+                              2. Observe that the response contains sensitive
+                              data from the database...
+                            </p>
+                            <p>
+                              3. The vulnerability can be exploited by
+                              injecting...
+                            </p>
+                          </div>
+
+                          {/* Lock overlay */}
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--surface-raised)]/80 backdrop-blur-[2px] rounded-lg">
+                            <Lock
+                              size={16}
+                              className="text-[var(--text-muted)] mb-2"
+                            />
+                            <p className="text-[13px] text-[var(--text-muted)] mb-3">
+                              Reproduction steps, proof-of-concept, and fix
+                              guidance
+                            </p>
+                            <button
+                              onClick={() => handleCheckout("unlock")}
+                              disabled={checkoutLoading}
+                              className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--bg)] text-sm font-semibold rounded-lg transition-all hover:shadow-[0_0_20px_var(--accent-glow)]"
+                            >
+                              {checkoutLoading
+                                ? "Loading..."
+                                : "Unlock full report — $149"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Full content for paid tier */}
+                      {isPaid && finding.reproduction_steps && (
+                        <div className="mt-4 pt-4 border-t border-[var(--border)]">
+                          <h4 className="text-sm font-semibold mb-2">
+                            Reproduction Steps
+                          </h4>
+                          <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap">
+                            {finding.reproduction_steps}
+                          </p>
+                        </div>
+                      )}
+
+                      {isPaid && finding.poc && (
+                        <div className="mt-4">
+                          <h4 className="text-sm font-semibold mb-2">
+                            Proof of Concept
+                          </h4>
+                          <div className="relative">
+                            <pre className="bg-black border border-[var(--border)] rounded-lg p-4 text-[13px] font-mono text-[var(--text-secondary)] overflow-x-auto">
+                              {finding.poc}
+                            </pre>
+                            <button
+                              onClick={() => copyToClipboard(finding.poc!, i)}
+                              className="absolute top-2 right-2 p-1.5 bg-[var(--surface)] border border-[var(--border)] rounded hover:bg-[var(--surface-raised)] transition-colors"
+                            >
+                              {copiedIndex === i ? (
+                                <CheckCheck
+                                  size={14}
+                                  className="text-[var(--success)]"
+                                />
+                              ) : (
+                                <Copy
+                                  size={14}
+                                  className="text-[var(--text-muted)]"
+                                />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {isPaid && finding.fix_guidance && (
+                        <div className="mt-4">
+                          <h4 className="text-sm font-semibold mb-2">
+                            Fix Guidance
+                          </h4>
+                          <p className="text-sm text-[var(--text-secondary)]">
+                            {finding.fix_guidance}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <p className="text-sm text-slate-600 mb-1">
-                  <span className="font-medium">Endpoint:</span>{" "}
-                  <code className="bg-slate-100 px-1 rounded">
-                    {finding.endpoint}
-                  </code>
-                </p>
-                <p className="text-sm text-slate-600">{finding.impact}</p>
-
-                {isPaid && finding.reproduction_steps && (
-                  <div className="mt-4 pt-4 border-t">
-                    <h4 className="font-medium text-sm mb-2">
-                      Reproduction Steps
-                    </h4>
-                    <pre className="bg-slate-100 p-2 rounded text-xs overflow-x-auto">
-                      {finding.reproduction_steps}
-                    </pre>
-                  </div>
-                )}
-
-                {isPaid && finding.fix_guidance && (
-                  <div className="mt-4">
-                    <h4 className="font-medium text-sm mb-2">Fix Guidance</h4>
-                    <p className="text-sm text-slate-600">
-                      {finding.fix_guidance}
-                    </p>
-                  </div>
-                )}
-
-                {!isPaid && (
-                  <div className="mt-4 pt-4 border-t border-dashed">
-                    <p className="text-sm text-slate-400 flex items-center gap-2">
-                      <span>🔒</span> Reproduction steps, PoC, and fix guidance
-                      locked
-                    </p>
-                  </div>
-                )}
-              </Card>
-            ))}
+              );
+            })}
           </div>
         )}
 
-        {/* CTAs */}
+        {/* Deep Analysis upsell */}
         {(!isPaid || results.paid_tier === "unlock") && (
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4 text-center">
-              {isPaid ? "Go deeper" : "Unlock full report"}
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 text-center">
+            <h2 className="text-lg font-semibold mb-2">
+              {isPaid ? "Go deeper" : "Want to go deeper?"}
             </h2>
-            <div className="grid md:grid-cols-2 gap-4">
-              {showUnlockTier && (
-                <div className="border rounded-lg p-4">
-                  <h3 className="font-semibold mb-2">Unlock Report</h3>
-                  <p className="text-2xl font-bold mb-2">$149</p>
-                  <ul className="text-sm text-slate-600 mb-4 space-y-1">
-                    <li>Full reproduction steps</li>
-                    <li>Proof-of-concept code</li>
-                    <li>Fix guidance</li>
-                    <li>PDF export</li>
-                  </ul>
-                  <Button
-                    className="w-full"
-                    onClick={() => handleCheckout("unlock")}
-                    disabled={checkoutLoading}
-                  >
-                    {checkoutLoading ? "Loading..." : "Unlock for $149"}
-                  </Button>
-                </div>
-              )}
-              {showDeepTier && (
-                <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
-                  <h3 className="font-semibold mb-2">Deep Analysis</h3>
-                  <p className="text-2xl font-bold mb-2">$399</p>
-                  <ul className="text-sm text-slate-600 mb-4 space-y-1">
-                    <li>Everything in Unlock</li>
-                    <li>1-4 hour thorough scan</li>
-                    <li>Executive summary</li>
-                    <li>Security certificate</li>
-                    <li>One free rescan</li>
-                  </ul>
-                  <Button
-                    className="w-full"
-                    onClick={() => handleCheckout("deep")}
-                    disabled={checkoutLoading}
-                  >
-                    {checkoutLoading ? "Loading..." : "Get deep analysis $399"}
-                  </Button>
-                </div>
-              )}
-            </div>
-          </Card>
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
+              Our Deep Analysis runs for 1-4 hours with 7+ attack categories.
+            </p>
+            <button
+              onClick={() => handleCheckout("deep")}
+              disabled={checkoutLoading}
+              className="px-6 py-2.5 bg-[var(--surface-raised)] border border-[var(--border)] hover:border-[var(--accent)] text-[var(--text)] text-sm font-medium rounded-lg transition-all"
+            >
+              {checkoutLoading ? "Loading..." : "Deep Analysis — $399"}
+            </button>
+          </div>
         )}
       </div>
+
+      <Footer />
     </main>
   );
 }
