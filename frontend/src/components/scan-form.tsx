@@ -46,9 +46,14 @@ export function ScanForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-md">
-      <div className="space-y-2">
-        <Label htmlFor="url">Your app URL</Label>
+    <form onSubmit={handleSubmit} className="space-y-4 w-full">
+      <div className="space-y-1.5">
+        <Label
+          htmlFor="url"
+          className="text-[13px] font-medium text-[var(--text-secondary)]"
+        >
+          Your app URL
+        </Label>
         <Input
           id="url"
           type="url"
@@ -56,11 +61,17 @@ export function ScanForm() {
           value={targetUrl}
           onChange={(e) => setTargetUrl(e.target.value)}
           required
+          className="h-10 bg-[var(--bg)] border-[var(--border)] text-[var(--text)] placeholder:text-[var(--text-dim)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-glow)]"
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="email">Email for results</Label>
+      <div className="space-y-1.5">
+        <Label
+          htmlFor="email"
+          className="text-[13px] font-medium text-[var(--text-secondary)]"
+        >
+          Email for results
+        </Label>
         <Input
           id="email"
           type="email"
@@ -68,27 +79,34 @@ export function ScanForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
+          className="h-10 bg-[var(--bg)] border-[var(--border)] text-[var(--text)] placeholder:text-[var(--text-dim)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-glow)]"
         />
       </div>
 
-      <div className="flex items-start space-x-2">
+      <div className="flex items-start space-x-2 pt-1">
         <Checkbox
           id="consent"
           checked={consent}
           onCheckedChange={(checked) => setConsent(checked === true)}
           required
+          className="border-[var(--border)] data-[state=checked]:bg-[var(--accent)] data-[state=checked]:border-[var(--accent)]"
         />
-        <Label htmlFor="consent" className="text-sm text-muted-foreground">
+        <Label
+          htmlFor="consent"
+          className="text-xs text-[var(--text-muted)] leading-relaxed cursor-pointer"
+        >
           I confirm I own this application or have explicit written permission
           to perform security testing on it.
         </Label>
       </div>
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && (
+        <p className="text-sm text-[var(--severity-critical)]">{error}</p>
+      )}
 
       <Button
         type="submit"
-        className="w-full bg-[#d4a853] hover:bg-[#c9a227] text-[#18181b] font-semibold"
+        className="w-full h-10 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--bg)] font-semibold text-sm transition-all hover:shadow-[0_0_20px_var(--accent-glow)]"
         disabled={loading || !consent}
       >
         {loading ? "Starting scan..." : "Scan your app free"}
