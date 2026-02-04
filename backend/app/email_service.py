@@ -11,7 +11,7 @@ async def send_scan_started_email(email: str, scan_id: str, target_url: str):
         return
 
     resend.Emails.send({
-        "from": "Argus <noreply@yourdomain.com>",
+        "from": "Nullscan <noreply@yourdomain.com>",
         "to": email,
         "subject": f"Scanning {target_url}",
         "html": f"""
@@ -46,7 +46,7 @@ async def send_scan_complete_email(
         findings_text = "No obvious issues were detected in the quick scan."
 
     resend.Emails.send({
-        "from": "Argus <noreply@yourdomain.com>",
+        "from": "Nullscan <noreply@yourdomain.com>",
         "to": email,
         "subject": subject,
         "html": f"""
@@ -71,7 +71,7 @@ async def send_scan_failed_email(email: str, scan_id: str):
         return
 
     resend.Emails.send({
-        "from": "Argus <noreply@yourdomain.com>",
+        "from": "Nullscan <noreply@yourdomain.com>",
         "to": email,
         "subject": "Security scan failed",
         "html": f"""
@@ -94,7 +94,7 @@ async def send_deep_scan_started_email(email: str, scan_id: str, target_url: str
         return
 
     resend.Emails.send({
-        "from": "Argus <noreply@yourdomain.com>",
+        "from": "Nullscan <noreply@yourdomain.com>",
         "to": email,
         "subject": f"Deep analysis started for {target_url}",
         "html": f"""
@@ -113,7 +113,7 @@ async def send_payment_received_email(email: str, scan_id: str, tier: str):
         return
 
     resend.Emails.send({
-        "from": "Argus <noreply@yourdomain.com>",
+        "from": "Nullscan <noreply@yourdomain.com>",
         "to": email,
         "subject": "Payment received - Full report unlocked",
         "html": f"""

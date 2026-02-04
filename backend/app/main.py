@@ -3,12 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import database
 from app.routers import scans, webhooks
 
-app = FastAPI(title="Argus API")
+app = FastAPI(title="Nullscan API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
