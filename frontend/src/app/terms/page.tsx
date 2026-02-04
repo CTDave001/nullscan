@@ -1,41 +1,58 @@
+import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
+
 export default function TermsPage() {
   return (
-    <main className="min-h-screen bg-white">
-      <div className="max-w-2xl mx-auto px-4 py-16">
+    <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+      <Navbar />
+
+      <div className="max-w-2xl mx-auto px-4 pt-24 pb-16">
         <h1 className="text-3xl font-bold mb-8">Terms of Service</h1>
 
-        <div className="prose prose-slate">
-          <h2>Authorization</h2>
-          <p>
-            By using this service, you confirm that you own the application
-            being tested or have explicit written permission from the owner to
-            perform security testing.
-          </p>
+        <div className="space-y-6">
+          <section>
+            <h2 className="text-xl font-semibold mb-3 text-[var(--text)]">Authorization</h2>
+            <p className="text-[var(--text-secondary)]">
+              By using this service, you confirm that you own the application
+              being tested or have explicit written permission from the owner to
+              perform security testing.
+            </p>
+          </section>
 
-          <h2>Liability</h2>
-          <p>
-            We are not liable for how you use the findings from our scans. You
-            are responsible for using this information ethically and legally.
-          </p>
+          <section>
+            <h2 className="text-xl font-semibold mb-3 text-[var(--text)]">Liability</h2>
+            <p className="text-[var(--text-secondary)]">
+              We are not liable for how you use the findings from our scans. You
+              are responsible for using this information ethically and legally.
+            </p>
+          </section>
 
-          <h2>No Guarantees</h2>
-          <p>
-            We do not guarantee that our scans will find all vulnerabilities.
-            Our service is designed to identify common security issues but
-            should not be considered a replacement for comprehensive security
-            audits.
-          </p>
+          <section>
+            <h2 className="text-xl font-semibold mb-3 text-[var(--text)]">No Guarantees</h2>
+            <p className="text-[var(--text-secondary)]">
+              We do not guarantee that our scans will find all vulnerabilities.
+              Our service is designed to identify common security issues but
+              should not be considered a replacement for comprehensive security
+              audits.
+            </p>
+          </section>
 
-          <h2>Refund Policy</h2>
-          <p>
-            No refunds are provided if no vulnerabilities are found. You are
-            paying for a security assessment, not for finding bugs.
-          </p>
+          <section>
+            <h2 className="text-xl font-semibold mb-3 text-[var(--text)]">Refund Policy</h2>
+            <p className="text-[var(--text-secondary)]">
+              No refunds are provided if no vulnerabilities are found. You are
+              paying for a security assessment, not for finding bugs.
+            </p>
+          </section>
 
-          <h2>Service Refusal</h2>
-          <p>We reserve the right to refuse service at our discretion.</p>
+          <section>
+            <h2 className="text-xl font-semibold mb-3 text-[var(--text)]">Service Refusal</h2>
+            <p className="text-[var(--text-secondary)]">We reserve the right to refuse service at our discretion.</p>
+          </section>
         </div>
       </div>
+
+      <Footer />
     </main>
   );
 }
