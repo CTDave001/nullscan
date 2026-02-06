@@ -305,10 +305,12 @@ _max_tokens_seen = {}
 
 async def _update_progress(
     scan_id: str, tracer, vulnerabilities: list,
-    cost_limit: float = 0, scan_task: asyncio.Task | None = None,
+    cost_limit: float = 0, agent=None,
 ):
     """Write scan progress to database periodically."""
     from app.database import database, scans
+
+    _cost_warning_sent = False
 
     while True:
         await asyncio.sleep(5)
@@ -316,11 +318,26 @@ async def _update_progress(
             stats = tracer.get_total_llm_stats()
             total = stats.get("total", {})
 
-            # Check cost limit and cancel scan if exceeded
+            # Check cost limit — tell the agent to wrap up
             current_cost = total.get("cost", 0.0)
-            if cost_limit > 0 and current_cost >= cost_limit and scan_task and not scan_task.done():
-                print(f"[cost] Cost ${current_cost:.2f} exceeded limit ${cost_limit:.2f}, cancelling scan", flush=True)
-                scan_task.cancel()
+            if cost_limit > 0 and current_cost >= cost_limit and agent and not _cost_warning_sent:
+                _cost_warning_sent = True
+                print(f"[cost] Cost ${current_cost:.2f} exceeded limit ${cost_limit:.2f}, telling agent to wrap up", flush=True)
+                try:
+                    # Inject wrap-up message and reduce remaining iterations
+                    agent.state.add_message("user",
+                        "URGENT COST LIMIT REACHED: You have exceeded the budget for this scan. "
+                        "Immediately wrap up all work. Tell all sub-agents to finish their current "
+                        "tasks and call agent_finish NOW. Then generate your final report and call "
+                        "finish_scan. No new tests or scans — wrap up with what you have."
+                    )
+                    # Give the agent a few iterations to wrap up, then it hits max
+                    agent.state.max_iterations = min(
+                        agent.state.max_iterations,
+                        agent.state.iteration + 8,
+                    )
+                except Exception as e:
+                    print(f"[cost] Failed to send wrap-up message: {e}", flush=True)
 
             # Track max tokens (never decrease)
             current_tokens = total.get("input_tokens", 0)
@@ -500,20 +517,13 @@ async def run_strix_scan_async(
         print(f"[strix] Launching agent (cost limit: ${cost_limit:.2f})...")
         agent = StrixAgent(agent_config)
 
-        # Run scan as a task so it can be cancelled by the cost monitor
-        scan_task = asyncio.create_task(agent.execute_scan(scan_config))
-
-        # Start progress tracking with cost limit
+        # Start progress tracking with cost limit and agent reference
         if scan_id:
             progress_task = asyncio.create_task(
-                _update_progress(scan_id, tracer, vulnerabilities, cost_limit, scan_task)
+                _update_progress(scan_id, tracer, vulnerabilities, cost_limit, agent)
             )
 
-        try:
-            result = await scan_task
-        except asyncio.CancelledError:
-            print(f"[strix] Scan cancelled due to cost limit", flush=True)
-            result = None
+        result = await agent.execute_scan(scan_config)
 
         # Check for scan errors
         if isinstance(result, dict) and not result.get("success", True):
