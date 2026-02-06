@@ -425,19 +425,14 @@ async def run_strix_scan_async(
     Run Strix scan using Python API (follows original CLI pattern).
     Returns parsed results or error dict.
     """
-    # Configure scan mode and iterations per tier
-    if scan_type == "pro":
-        scan_mode = "standard"
-        os.environ["STRIX_LLM"] = "openai/gpt-5.2"
-        max_iterations = 300
-    elif scan_type == "deep":
-        scan_mode = "deep"
-        os.environ["STRIX_LLM"] = "openai/gpt-5.2"
-        max_iterations = 500
-    else:
-        scan_mode = "quick"
-        os.environ["STRIX_LLM"] = "openai/gpt-5.2"
-        max_iterations = 50
+    # Configure scan mode and iterations per tier (from env vars)
+    tier_config = {
+        "quick": (settings.tier_quick_llm, settings.tier_quick_iterations, settings.tier_quick_mode),
+        "pro":   (settings.tier_pro_llm,   settings.tier_pro_iterations,   settings.tier_pro_mode),
+        "deep":  (settings.tier_deep_llm,  settings.tier_deep_iterations,  settings.tier_deep_mode),
+    }
+    llm, max_iterations, scan_mode = tier_config.get(scan_type, tier_config["quick"])
+    os.environ["STRIX_LLM"] = llm
     os.environ["LLM_API_KEY"] = settings.llm_api_key
 
     progress_task = None
