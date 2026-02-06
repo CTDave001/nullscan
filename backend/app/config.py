@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     tier_deep_iterations: int = 500
     tier_deep_mode: str = "deep"
 
+    # Admin API key for monitoring endpoints
+    admin_api_key: str = ""
+
     # Per-tier cost limits (USD) — scan wraps up when exceeded
     tier_quick_cost_limit: float = 4.0
     tier_pro_cost_limit: float = 150.0

@@ -529,3 +529,47 @@ async def send_pdf_report(scan_id: str):
     )
 
     return {"success": True, "message": "PDF report sent to your email"}
+
+
+@router.get("/admin/dashboard")
+async def admin_dashboard(key: str = ""):
+    """Admin endpoint to view all scans and their statuses."""
+    if not settings.admin_api_key or key != settings.admin_api_key:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    all_scans = await database.fetch_all(
+        scans.select().order_by(scans.c.created_at.desc()).limit(100)
+    )
+
+    summary = {"pending": 0, "running": 0, "completed": 0, "failed": 0}
+    scan_list = []
+
+    for s in all_scans:
+        status = s["status"]
+        summary[status] = summary.get(status, 0) + 1
+
+        scan_info = {
+            "id": s["id"],
+            "email": s["email"],
+            "target_url": s["target_url"],
+            "status": status,
+            "scan_type": s["scan_type"],
+            "paid_tier": s["paid_tier"],
+            "parent_scan_id": s["parent_scan_id"],
+            "created_at": str(s["created_at"]),
+            "completed_at": str(s["completed_at"]) if s["completed_at"] else None,
+        }
+
+        # Include cost from progress for running scans
+        if status == "running" and s["progress_json"]:
+            progress = json.loads(s["progress_json"])
+            scan_info["cost"] = progress.get("cost", 0)
+            scan_info["tools"] = progress.get("tools", 0)
+            scan_info["active_agents"] = progress.get("active_agents", 0)
+
+        scan_list.append(scan_info)
+
+    return {
+        "summary": summary,
+        "scans": scan_list,
+    }
