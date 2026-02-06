@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     tier_deep_llm: str = "openai/gpt-5.2"
     tier_deep_iterations: int = 500
     tier_deep_mode: str = "deep"
+
+    # Per-tier cost limits (USD) — scan wraps up when exceeded
+    tier_quick_cost_limit: float = 4.0
+    tier_pro_cost_limit: float = 150.0
+    tier_deep_cost_limit: float = 600.0
     cors_origins: str = "https://nullscan.io,https://www.nullscan.io"
     unlimited_emails: str = ""
 

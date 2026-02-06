@@ -303,7 +303,10 @@ def _determine_scan_phase(tracer, vulnerabilities: list) -> str:
 _max_tokens_seen = {}
 
 
-async def _update_progress(scan_id: str, tracer, vulnerabilities: list):
+async def _update_progress(
+    scan_id: str, tracer, vulnerabilities: list,
+    cost_limit: float = 0, scan_task: asyncio.Task | None = None,
+):
     """Write scan progress to database periodically."""
     from app.database import database, scans
 
@@ -312,6 +315,12 @@ async def _update_progress(scan_id: str, tracer, vulnerabilities: list):
         try:
             stats = tracer.get_total_llm_stats()
             total = stats.get("total", {})
+
+            # Check cost limit and cancel scan if exceeded
+            current_cost = total.get("cost", 0.0)
+            if cost_limit > 0 and current_cost >= cost_limit and scan_task and not scan_task.done():
+                print(f"[cost] Cost ${current_cost:.2f} exceeded limit ${cost_limit:.2f}, cancelling scan", flush=True)
+                scan_task.cancel()
 
             # Track max tokens (never decrease)
             current_tokens = total.get("input_tokens", 0)
@@ -425,13 +434,13 @@ async def run_strix_scan_async(
     Run Strix scan using Python API (follows original CLI pattern).
     Returns parsed results or error dict.
     """
-    # Configure scan mode and iterations per tier (from env vars)
+    # Configure scan mode, iterations, and cost limit per tier (from env vars)
     tier_config = {
-        "quick": (settings.tier_quick_llm, settings.tier_quick_iterations, settings.tier_quick_mode),
-        "pro":   (settings.tier_pro_llm,   settings.tier_pro_iterations,   settings.tier_pro_mode),
-        "deep":  (settings.tier_deep_llm,  settings.tier_deep_iterations,  settings.tier_deep_mode),
+        "quick": (settings.tier_quick_llm, settings.tier_quick_iterations, settings.tier_quick_mode, settings.tier_quick_cost_limit),
+        "pro":   (settings.tier_pro_llm,   settings.tier_pro_iterations,   settings.tier_pro_mode,   settings.tier_pro_cost_limit),
+        "deep":  (settings.tier_deep_llm,  settings.tier_deep_iterations,  settings.tier_deep_mode,  settings.tier_deep_cost_limit),
     }
-    llm, max_iterations, scan_mode = tier_config.get(scan_type, tier_config["quick"])
+    llm, max_iterations, scan_mode, cost_limit = tier_config.get(scan_type, tier_config["quick"])
     os.environ["STRIX_LLM"] = llm
     os.environ["LLM_API_KEY"] = settings.llm_api_key
 
@@ -480,12 +489,6 @@ async def run_strix_scan_async(
 
         tracer.vulnerability_found_callback = on_vulnerability
 
-        # Start progress tracking
-        if scan_id:
-            progress_task = asyncio.create_task(
-                _update_progress(scan_id, tracer, vulnerabilities)
-            )
-
         # Create agent and run scan (following CLI pattern)
         llm_config = LLMConfig(scan_mode=scan_mode)
         agent_config = {
@@ -494,9 +497,23 @@ async def run_strix_scan_async(
             "non_interactive": True,
         }
 
-        print(f"[strix] Launching agent...")
+        print(f"[strix] Launching agent (cost limit: ${cost_limit:.2f})...")
         agent = StrixAgent(agent_config)
-        result = await agent.execute_scan(scan_config)
+
+        # Run scan as a task so it can be cancelled by the cost monitor
+        scan_task = asyncio.create_task(agent.execute_scan(scan_config))
+
+        # Start progress tracking with cost limit
+        if scan_id:
+            progress_task = asyncio.create_task(
+                _update_progress(scan_id, tracer, vulnerabilities, cost_limit, scan_task)
+            )
+
+        try:
+            result = await scan_task
+        except asyncio.CancelledError:
+            print(f"[strix] Scan cancelled due to cost limit", flush=True)
+            result = None
 
         # Check for scan errors
         if isinstance(result, dict) and not result.get("success", True):
