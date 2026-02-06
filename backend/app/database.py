@@ -31,10 +31,11 @@ rate_limits = sqlalchemy.Table(
     sqlalchemy.Column("month", sqlalchemy.String(7)),  # YYYY-MM
 )
 
-engine = sqlalchemy.create_engine(
-    settings.database_url.replace("sqlite:///", "sqlite:///"),
-    connect_args={"check_same_thread": False}
-)
+_connect_args = {}
+if settings.database_url.startswith("sqlite"):
+    _connect_args["check_same_thread"] = False
+
+engine = sqlalchemy.create_engine(settings.database_url, connect_args=_connect_args)
 metadata.create_all(engine)
 
 # Migrate existing DB: add parent_scan_id column if missing
