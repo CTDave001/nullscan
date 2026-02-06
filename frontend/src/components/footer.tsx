@@ -1,22 +1,42 @@
-import Link from "next/link";
+import Link from "next/link"
 
 export function Footer() {
   return (
-    <footer className="py-8 text-center">
-      <div className="flex items-center justify-center gap-4 text-sm text-[var(--text-muted)] mb-4">
-        <Link href="/scope" className="hover:text-[var(--accent)] transition-colors">
-          What we test
-        </Link>
-        <span className="text-[var(--text-dim)]">·</span>
-        <Link href="/terms" className="hover:text-[var(--accent)] transition-colors">
-          Terms
-        </Link>
-        <span className="text-[var(--text-dim)]">·</span>
-        <Link href="/privacy" className="hover:text-[var(--accent)] transition-colors">
-          Privacy
-        </Link>
+    <footer
+      className="py-8 2xl:py-10 px-6 2xl:px-12 border-t"
+      style={{ borderColor: "var(--border)" }}
+    >
+      <div className="max-w-6xl 2xl:max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        <p
+          className="font-mono text-[10px] uppercase tracking-wider"
+          style={{ color: "var(--text-dim)" }}
+        >
+          NULLSCAN 2026
+        </p>
+        <div className="flex items-center gap-6 font-mono text-[10px] uppercase tracking-wider">
+          <Link
+            href="/scope"
+            className="transition-colors hover:text-[var(--cyan)]"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Scope
+          </Link>
+          <Link
+            href="/terms"
+            className="transition-colors hover:text-[var(--cyan)]"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Terms
+          </Link>
+          <Link
+            href="/privacy"
+            className="transition-colors hover:text-[var(--cyan)]"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Privacy
+          </Link>
+        </div>
       </div>
-      <p className="text-xs text-[var(--text-dim)]">© 2026 nullscan</p>
     </footer>
-  );
+  )
 }

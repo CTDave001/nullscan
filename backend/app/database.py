@@ -19,6 +19,8 @@ scans = sqlalchemy.Table(
     sqlalchemy.Column("paid_tier", sqlalchemy.String(20), nullable=True),
     sqlalchemy.Column("stripe_payment_id", sqlalchemy.String(255), nullable=True),
     sqlalchemy.Column("retry_count", sqlalchemy.Integer, default=0),
+    sqlalchemy.Column("progress_json", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("parent_scan_id", sqlalchemy.String(36), nullable=True),
 )
 
 rate_limits = sqlalchemy.Table(
@@ -34,3 +36,11 @@ engine = sqlalchemy.create_engine(
     connect_args={"check_same_thread": False}
 )
 metadata.create_all(engine)
+
+# Migrate existing DB: add parent_scan_id column if missing
+with engine.connect() as conn:
+    try:
+        conn.execute(sqlalchemy.text("ALTER TABLE scans ADD COLUMN parent_scan_id VARCHAR(36)"))
+        conn.commit()
+    except Exception:
+        pass  # Column already exists

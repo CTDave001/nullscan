@@ -1,9 +1,48 @@
 import asyncio
 import json
+import subprocess
 from datetime import datetime
 from app.database import database, scans
-from app.strix_runner import run_strix_scan
+from app.strix_runner import run_strix_scan_async
 from app.email_service import send_scan_complete_email, send_scan_failed_email
+
+
+def cleanup_strix_containers():
+    """Remove all strix sandbox Docker containers."""
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "-a", "-q", "--filter", "ancestor=ghcr.io/usestrix/strix-sandbox:0.1.11"],
+            capture_output=True, text=True, timeout=10,
+        )
+        container_ids = result.stdout.strip().split("\n")
+        container_ids = [c for c in container_ids if c]
+        if container_ids:
+            subprocess.run(
+                ["docker", "rm", "-f"] + container_ids,
+                capture_output=True, timeout=30,
+            )
+            print(f"[cleanup] Removed {len(container_ids)} strix containers", flush=True)
+    except Exception as e:
+        print(f"[cleanup] Error: {e}", flush=True)
+
+
+async def reset_stuck_scans():
+    """Mark any scans stuck in 'running' as 'failed' on worker startup."""
+    result = await database.fetch_all(
+        scans.select().where(scans.c.status == "running")
+    )
+    for scan in result:
+        await database.execute(
+            scans.update()
+            .where(scans.c.id == scan["id"])
+            .values(
+                status="failed",
+                results_json=json.dumps({"error": "Worker restarted while scan was running"}),
+                completed_at=datetime.now(),
+            )
+        )
+    if result:
+        print(f"[cleanup] Reset {len(result)} stuck scans to failed", flush=True)
 
 
 async def process_pending_scans():
@@ -28,20 +67,22 @@ async def process_scan(scan: dict):
 
     try:
         # Run Strix
-        results = run_strix_scan(
+        results = await run_strix_scan_async(
             target_url=scan["target_url"],
             scan_type=scan["scan_type"],
+            scan_id=scan_id,
         )
 
         if "error" in results:
             # Check retry count
-            if scan["retry_count"] < 1:
+            retry_count = scan["retry_count"] or 0
+            if retry_count < 1:
                 await database.execute(
                     scans.update()
                     .where(scans.c.id == scan_id)
                     .values(
                         status="pending",
-                        retry_count=scan["retry_count"] + 1,
+                        retry_count=retry_count + 1,
                     )
                 )
                 return
@@ -87,12 +128,16 @@ async def process_scan(scan: dict):
             )
         )
         await send_scan_failed_email(scan["email"], scan_id)
+    finally:
+        cleanup_strix_containers()
 
 
 async def run_worker():
     """Main worker loop."""
     await database.connect()
-    print("Worker started. Polling for scans...")
+    cleanup_strix_containers()
+    await reset_stuck_scans()
+    print("Worker started. Polling for scans...", flush=True)
 
     while True:
         try:

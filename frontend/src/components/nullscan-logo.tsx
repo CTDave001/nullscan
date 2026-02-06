@@ -1,73 +1,87 @@
+"use client"
+
+import Link from "next/link"
+
 interface NullscanLogoProps {
-  size?: "sm" | "md" | "lg";
-  iconOnly?: boolean;
-  className?: string;
+  size?: "sm" | "md" | "lg"
+  iconOnly?: boolean
 }
 
-const sizes = {
-  sm: { icon: 24, text: 14, gap: 6 },
-  md: { icon: 32, text: 18, gap: 8 },
-  lg: { icon: 48, text: 24, gap: 10 },
-};
+const sizeConfig = {
+  sm: { icon: 20, text: "text-xs" },
+  md: { icon: 24, text: "text-sm" },
+  lg: { icon: 32, text: "text-base" },
+}
 
-export function NullscanLogo({
-  size = "md",
-  iconOnly = false,
-  className = "",
-}: NullscanLogoProps) {
-  const { icon, text, gap } = sizes[size];
-  const strokeWidth = size === "sm" ? 1.5 : size === "lg" ? 2.5 : 2;
+export function NullscanLogo({ size = "md", iconOnly = false }: NullscanLogoProps) {
+  const config = sizeConfig[size]
 
   return (
-    <div className={`flex items-center ${className}`} style={{ gap }}>
-      {/* Null set symbol (∅) */}
-      <svg
-        width={icon}
-        height={icon}
-        viewBox="0 0 32 32"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-label="Nullscan logo"
+    <Link href="/" className="flex items-center gap-2.5 group">
+      {/* Geometric mark */}
+      <div
+        className="relative flex items-center justify-center transition-all group-hover:scale-105"
+        style={{
+          width: config.icon,
+          height: config.icon,
+        }}
       >
-        {/* Circle */}
-        <circle
-          cx="16"
-          cy="16"
-          r="11"
-          stroke="var(--accent)"
-          strokeWidth={strokeWidth}
+        <svg
+          width={config.icon}
+          height={config.icon}
+          viewBox="0 0 24 24"
           fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          {/* Outer ring */}
+          <circle
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="var(--cyan)"
+            strokeWidth="1.5"
+            fill="none"
+            className="opacity-60"
+          />
+          {/* Inner glow ring */}
+          <circle
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="var(--cyan)"
+            strokeWidth="0.5"
+            fill="none"
+            className="opacity-30"
+            style={{ filter: "blur(2px)" }}
+          />
+          {/* Null stroke */}
+          <line
+            x1="6"
+            y1="18"
+            x2="18"
+            y2="6"
+            stroke="var(--cyan)"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+        {/* Glow effect */}
+        <div
+          className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{
+            boxShadow: "0 0 20px var(--cyan-glow-intense)",
+          }}
         />
-        {/* Diagonal line with gradient fade */}
-        <defs>
-          <linearGradient id="diagonalFade" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.3" />
-            <stop offset="20%" stopColor="var(--accent)" stopOpacity="1" />
-            <stop offset="80%" stopColor="var(--accent)" stopOpacity="1" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.3" />
-          </linearGradient>
-        </defs>
-        <line
-          x1="8"
-          y1="8"
-          x2="24"
-          y2="24"
-          stroke="url(#diagonalFade)"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-        />
-      </svg>
+      </div>
 
       {/* Wordmark */}
       {!iconOnly && (
-        <span
-          className="font-medium tracking-tight"
-          style={{ fontSize: text, letterSpacing: "-0.02em" }}
-        >
-          <span style={{ color: "var(--accent)" }}>null</span>
-          <span style={{ color: "var(--text)" }}>scan</span>
+        <span className={`font-mono uppercase tracking-widest ${config.text}`}>
+          <span style={{ color: "var(--cyan)" }} className="glow-text-cyan">null</span>
+          <span style={{ color: "var(--text-secondary)" }}>scan</span>
         </span>
       )}
-    </div>
-  );
+    </Link>
+  )
 }

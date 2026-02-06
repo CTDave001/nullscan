@@ -1,0 +1,34 @@
+# Environment files with secrets
+.env
+.env.local
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+
+# Databases
+*.db
+
+# Strix working directories
+backend/strix_runs/
+backend/strix_work/
+strix_test/
+strix_test2/
+
+# Debug/admin scripts
+backend/check_*.py
+backend/debug_*.py
+backend/fix_*.py
+backend/reset_*.py
+backend/monitor_*.py
+
+# Claude Code
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+nul

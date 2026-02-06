@@ -1,201 +1,353 @@
-import { ScanForm } from "@/components/scan-form";
-import { Navbar } from "@/components/navbar";
-import { Footer } from "@/components/footer";
-import { Check, X } from "lucide-react";
+"use client"
 
-export default function Home() {
+import { StatusBar } from "@/components/status-bar"
+import { GridOverlay, CornerMarkers } from "@/components/grid-overlay"
+import { Navbar } from "@/components/navbar"
+import { TerminalInput } from "@/components/terminal-input"
+import { ScanTicker } from "@/components/scan-ticker"
+import { ProcessSection } from "@/components/process-section"
+import { Footer } from "@/components/footer"
+import { Check, X } from "lucide-react"
+
+const ATTACK_VECTORS = [
+  "SQL Injection",
+  "Cross-Site Scripting",
+  "Authentication Bypass",
+  "IDOR / Broken Access Control",
+  "Server-Side Request Forgery",
+  "Path Traversal",
+  "Rate Limiting",
+  "Security Headers",
+]
+
+export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
-      <Navbar />
+    <div className="min-h-screen relative">
+      <StatusBar />
+      <GridOverlay />
+      <CornerMarkers />
+      <Navbar withStatusBar />
 
-      {/* Hero Section */}
-      <section className="pt-24 pb-16 md:pt-32 md:pb-24">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:gap-16">
-            {/* Left column - Copy */}
-            <div className="lg:w-[55%] mb-10 lg:mb-0">
-              <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4 leading-tight">
-                Your app.{" "}
-                <span className="text-[var(--accent)]">Their perspective.</span>
-              </h1>
-              <p className="text-lg text-[var(--text-secondary)] mb-6 max-w-lg">
-                Automated penetration testing that shows you what attackers
-                actually find.
-              </p>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--text-muted)]">
-                <span>No agents to install</span>
-                <span className="text-[var(--text-dim)]">·</span>
-                <span>No source code needed</span>
-                <span className="text-[var(--text-dim)]">·</span>
-                <span>Results in minutes</span>
-              </div>
-            </div>
-
-            {/* Right column - Form */}
-            <div className="lg:w-[45%]">
-              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 shadow-[0_0_80px_var(--accent-glow),0_0_20px_var(--accent-glow)]">
-                <ScanForm />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section className="py-16 md:py-24">
-        <div className="container mx-auto px-4">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">
-            How it works
-          </h2>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            {[
-              {
-                step: 1,
-                title: "Enter your URL",
-                description:
-                  "Paste your app's URL and your email. We only test publicly accessible endpoints — no credentials needed.",
-              },
-              {
-                step: 2,
-                title: "AI agents attack",
-                description:
-                  "Specialized agents probe for SQL injection, XSS, SSRF, authentication bypass, IDOR, and more. Watch them work in real-time.",
-              },
-              {
-                step: 3,
-                title: "Get a real report",
-                description:
-                  "Verified findings only. Every vulnerability includes proof-of-concept code and specific fix guidance. No false positives.",
-              },
-            ].map((item) => (
-              <div key={item.step} className="text-center">
-                <div className="w-10 h-10 border-2 border-[var(--accent)] bg-[var(--surface)] rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-[var(--accent)] font-bold">
-                    {item.step}
-                  </span>
+      <main className="relative z-10 pt-32 2xl:pt-40 pb-20">
+        {/* Hero Section */}
+        <section className="px-6 2xl:px-12 mb-32 2xl:mb-40">
+          <div className="max-w-7xl 2xl:max-w-[1600px] mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 2xl:gap-24 items-start">
+              {/* Left Column - Copy */}
+              <div className="space-y-8 2xl:space-y-10 stagger-children">
+                {/* Label */}
+                <div
+                  className="inline-flex items-center gap-2 px-3 py-1.5 2xl:px-4 2xl:py-2 rounded-[var(--radius-sm)] font-mono text-[10px] 2xl:text-xs uppercase tracking-wider"
+                  style={{
+                    backgroundColor: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-muted)"
+                  }}
+                >
+                  <div className="w-1.5 h-1.5 2xl:w-2 2xl:h-2 rounded-full animate-status-pulse" style={{ backgroundColor: "var(--online)" }} />
+                  Autonomous Security Testing
                 </div>
-                <h3 className="font-semibold mb-2">{item.title}</h3>
-                <p className="text-sm text-[var(--text-secondary)]">
-                  {item.description}
+
+                {/* Headline */}
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl 2xl:text-7xl font-bold leading-[1.1] tracking-tight">
+                  <span style={{ color: "var(--text)" }}>See what</span>
+                  <br />
+                  <span className="glow-text-cyan" style={{ color: "var(--cyan)" }}>attackers see.</span>
+                </h1>
+
+                {/* Subheadline */}
+                <p
+                  className="text-lg 2xl:text-xl max-w-md 2xl:max-w-lg leading-relaxed"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  AI-powered penetration testing that probes your application like a real adversary.
+                  No agents. No credentials. Just results.
                 </p>
+
+                {/* Attack Vectors */}
+                <div className="pt-4 2xl:pt-6">
+                  <p className="font-mono text-[10px] 2xl:text-xs uppercase tracking-wider mb-4" style={{ color: "var(--text-dim)" }}>
+                    Attack Vectors
+                  </p>
+                  <div className="flex flex-wrap gap-2 2xl:gap-3">
+                    {ATTACK_VECTORS.map((vector) => (
+                      <span
+                        key={vector}
+                        className="px-2.5 py-1 2xl:px-3 2xl:py-1.5 font-mono text-[11px] 2xl:text-xs rounded-[var(--radius-sm)] transition-colors hover:border-[var(--cyan)]"
+                        style={{
+                          backgroundColor: "var(--surface)",
+                          border: "1px solid var(--border)",
+                          color: "var(--text-muted)"
+                        }}
+                      >
+                        {vector}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="py-16 md:py-24">
-        <div className="container mx-auto px-4">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">
-            Pricing
-          </h2>
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {/* Free Scan */}
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
-              <h3 className="font-semibold text-lg mb-2">Free Scan</h3>
-              <p className="text-3xl font-bold mb-4">$0</p>
-              <ul className="space-y-2 text-sm text-[var(--text-secondary)]">
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  Quick external scan
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  Finding titles and severity
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  Affected endpoints
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  Impact description
-                </li>
-                <li className="flex items-center gap-2 text-[var(--text-dim)]">
-                  <X size={14} />
-                  <span className="line-through">Reproduction steps</span>
-                </li>
-                <li className="flex items-center gap-2 text-[var(--text-dim)]">
-                  <X size={14} />
-                  <span className="line-through">Proof-of-concept code</span>
-                </li>
-                <li className="flex items-center gap-2 text-[var(--text-dim)]">
-                  <X size={14} />
-                  <span className="line-through">Fix guidance</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Unlock Report - Highlighted */}
-            <div className="relative bg-[var(--surface)] border-2 border-[var(--accent)] rounded-xl p-6 shadow-[0_0_40px_var(--accent-glow)]">
-              <div className="absolute -top-3 right-4 bg-[var(--accent)] text-[var(--bg)] text-[11px] font-semibold px-2 py-0.5 rounded">
-                Most popular
+              {/* Right Column - Terminal */}
+              <div className="lg:pt-8 2xl:pt-12">
+                <TerminalInput />
               </div>
-              <h3 className="font-semibold text-lg mb-2 text-[var(--accent)]">
-                Unlock Report
-              </h3>
-              <p className="text-3xl font-bold mb-4">$149</p>
-              <ul className="space-y-2 text-sm text-[var(--text-secondary)]">
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  Everything in Free
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  Full reproduction steps
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  Proof-of-concept code
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  Fix guidance per finding
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  PDF export
-                </li>
-              </ul>
-            </div>
-
-            {/* Deep Analysis */}
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6">
-              <h3 className="font-semibold text-lg mb-2">Deep Analysis</h3>
-              <p className="text-3xl font-bold mb-4">$399</p>
-              <ul className="space-y-2 text-sm text-[var(--text-secondary)]">
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  Everything in Unlock
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  1-4 hour thorough deep scan
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  7+ vulnerability categories
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  Executive summary
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  Security certificate
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check size={14} className="text-[var(--success)]" />
-                  One free rescan
-                </li>
-              </ul>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <Footer />
-    </main>
-  );
+        {/* Recent Scans Ticker */}
+        <ScanTicker />
+
+      </main>
+
+      {/* How It Works - Scroll-driven (outside main for sticky to work) */}
+      <ProcessSection />
+
+      <main className="relative z-10">
+        {/* Pricing */}
+        <section id="pricing" className="py-24 2xl:py-32 px-6 2xl:px-12">
+          <div className="max-w-5xl 2xl:max-w-[1400px] mx-auto">
+            <div className="text-center mb-16 2xl:mb-20">
+              <p
+                className="font-mono text-[10px] 2xl:text-xs uppercase tracking-wider mb-4"
+                style={{ color: "var(--cyan)" }}
+              >
+                Pricing
+              </p>
+              <h2
+                className="text-3xl sm:text-4xl 2xl:text-5xl font-bold mb-4"
+                style={{ color: "var(--text)" }}
+              >
+                Simple, transparent pricing
+              </h2>
+              <p
+                className="text-base 2xl:text-lg max-w-md 2xl:max-w-lg mx-auto"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Start free, upgrade when you need detailed reports and remediation guidance.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 2xl:gap-6">
+              {/* Free Tier */}
+              <div
+                className="rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col"
+                style={{
+                  backgroundColor: "var(--surface)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                <div className="mb-6 2xl:mb-8">
+                  <p
+                    className="text-sm 2xl:text-base font-medium mb-3"
+                    style={{ color: "var(--text)" }}
+                  >
+                    Free Scan
+                  </p>
+                  <p
+                    className="text-3xl 2xl:text-4xl font-bold mb-2"
+                    style={{ color: "var(--text)" }}
+                  >
+                    $0
+                  </p>
+                  <p
+                    className="text-sm 2xl:text-base"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    See if you have vulnerabilities
+                  </p>
+                </div>
+
+                <ul className="space-y-3 mb-8 flex-1">
+                  {[
+                    { text: "Quick external scan", included: true },
+                    { text: "Finding titles and severity", included: true },
+                    { text: "Affected endpoints", included: true },
+                    { text: "Impact description", included: true },
+                    { text: "Reproduction steps", included: false },
+                    { text: "Proof-of-concept code", included: false },
+                  ].map((feature) => (
+                    <li
+                      key={feature.text}
+                      className={`flex items-center gap-2.5 text-sm ${feature.included ? "" : "opacity-50"}`}
+                      style={{ color: feature.included ? "var(--text-secondary)" : "var(--text-dim)" }}
+                    >
+                      {feature.included ? (
+                        <Check size={14} style={{ color: "var(--low)" }} />
+                      ) : (
+                        <X size={14} />
+                      )}
+                      <span className={feature.included ? "" : "line-through"}>{feature.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Unlock Tier */}
+              <div
+                className="rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col"
+                style={{
+                  backgroundColor: "var(--surface)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                <div className="mb-6 2xl:mb-8">
+                  <p
+                    className="text-sm 2xl:text-base font-medium mb-3"
+                    style={{ color: "var(--text)" }}
+                  >
+                    Unlock Report
+                  </p>
+                  <p
+                    className="text-3xl 2xl:text-4xl font-bold mb-2"
+                    style={{ color: "var(--text)" }}
+                  >
+                    $39
+                  </p>
+                  <p
+                    className="text-sm 2xl:text-base"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Full report with fixes
+                  </p>
+                </div>
+
+                <ul className="space-y-3 mb-8 flex-1">
+                  {[
+                    "Everything in Free",
+                    "Full reproduction steps",
+                    "Proof-of-concept code",
+                    "Fix guidance per finding",
+                    "PDF export",
+                  ].map((feature) => (
+                    <li
+                      key={feature}
+                      className="flex items-center gap-2.5 text-sm"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      <Check size={14} style={{ color: "var(--low)" }} />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Pro Tier - Highlighted */}
+              <div
+                className="rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col relative"
+                style={{
+                  backgroundColor: "var(--surface)",
+                  border: "1px solid var(--cyan)",
+                  boxShadow: "0 0 40px var(--cyan-glow)"
+                }}
+              >
+                <div
+                  className="absolute -top-3 right-4 text-[10px] 2xl:text-xs font-bold uppercase px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--cyan)", color: "var(--void)" }}
+                >
+                  Most popular
+                </div>
+                <div className="mb-6 2xl:mb-8">
+                  <p
+                    className="text-sm 2xl:text-base font-medium mb-3"
+                    style={{ color: "var(--cyan)" }}
+                  >
+                    Pro Scan
+                  </p>
+                  <p
+                    className="text-3xl 2xl:text-4xl font-bold mb-2"
+                    style={{ color: "var(--text)" }}
+                  >
+                    $250
+                  </p>
+                  <p
+                    className="text-sm 2xl:text-base"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Unlock + new comprehensive scan
+                  </p>
+                </div>
+
+                <ul className="space-y-3 mb-8 flex-1">
+                  {[
+                    "Everything in Unlock",
+                    "300-iteration scan",
+                    "More attack vectors",
+                    "Detailed report",
+                  ].map((feature) => (
+                    <li
+                      key={feature}
+                      className="flex items-center gap-2.5 text-sm"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      <Check size={14} style={{ color: "var(--cyan)" }} />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Deep Analysis Tier */}
+              <div
+                className="rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col"
+                style={{
+                  backgroundColor: "var(--surface)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                <div className="mb-6 2xl:mb-8">
+                  <p
+                    className="text-sm 2xl:text-base font-medium mb-3"
+                    style={{ color: "var(--text)" }}
+                  >
+                    Deep Analysis
+                  </p>
+                  <p
+                    className="text-3xl 2xl:text-4xl font-bold mb-2"
+                    style={{ color: "var(--text)" }}
+                  >
+                    $899
+                  </p>
+                  <p
+                    className="text-sm 2xl:text-base"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Unlock + thorough security audit
+                  </p>
+                </div>
+
+                <ul className="space-y-3 mb-8 flex-1">
+                  {[
+                    "Everything in Pro",
+                    "500-iteration deep scan",
+                    "Full attack coverage",
+                    "Executive summary",
+                  ].map((feature) => (
+                    <li
+                      key={feature}
+                      className="flex items-center gap-2.5 text-sm"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      <Check size={14} style={{ color: "var(--low)" }} />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <p
+              className="text-center text-sm mt-8"
+              style={{ color: "var(--text-dim)" }}
+            >
+              No credit card required for free scans. All scans are one-time purchases.
+            </p>
+          </div>
+        </section>
+
+        {/* Footer */}
+        <Footer />
+      </main>
+    </div>
+  )
 }

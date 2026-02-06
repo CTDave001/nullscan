@@ -1,505 +1,523 @@
-"use client";
+"use client"
 
-import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Navbar } from "@/components/navbar";
-import { Check, AlertCircle } from "lucide-react";
+import { useEffect, useState, useRef, useCallback } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { StatusBar } from "@/components/status-bar"
+import { GridOverlay, CornerMarkers } from "@/components/grid-overlay"
+import { NullscanLogo } from "@/components/nullscan-logo"
+import { AlertTriangle, CheckCircle, ExternalLink } from "lucide-react"
+
+const PHASES = [
+  { id: "init", label: "Initialize", short: "INIT" },
+  { id: "recon", label: "Reconnaissance", short: "RECON" },
+  { id: "probe", label: "Endpoint Probing", short: "PROBE" },
+  { id: "attack", label: "Attack Vectors", short: "ATTACK" },
+  { id: "analyze", label: "Response Analysis", short: "ANALYZE" },
+  { id: "report", label: "Report Generation", short: "REPORT" },
+]
 
 interface Scan {
-  id: string;
-  status: string;
-  target_url: string;
-  created_at: string;
+  id: string
+  status: string
+  target_url: string
+  created_at: string
+  scan_type: string
 }
 
 interface Finding {
-  title: string;
-  severity: string;
+  title: string
+  severity: string
 }
 
 interface ActiveAgent {
-  label: string;
-  description: string;
-  status: string;
+  label: string
+  description: string
+  status: string
 }
 
 interface ActivityEntry {
-  ts: string;
-  description: string;
-  status: string;
+  ts: string
+  description: string
+  status: string
+  line?: number
 }
 
 interface Progress {
-  agents?: number;
-  active_agents?: number;
-  tools?: number;
-  input_tokens?: number;
-  output_tokens?: number;
-  cost?: number;
-  vulnerabilities_found?: number;
-  findings_so_far?: Finding[];
-  active_agent_list?: ActiveAgent[];
-  recent_activity?: ActivityEntry[];
+  agents?: number
+  active_agents?: number
+  tools?: number
+  input_tokens?: number
+  output_tokens?: number
+  cost?: number
+  vulnerabilities_found?: number
+  findings_so_far?: Finding[]
+  active_agent_list?: ActiveAgent[]
+  recent_activity?: ActivityEntry[]
+  current_phase?: string
 }
 
-const PHASES = [
-  "Initializing sandbox",
-  "Reconnaissance & mapping",
-  "Probing endpoints",
-  "Testing attack vectors",
-  "Analyzing responses",
-  "Compiling report",
-];
-
 export default function ScanStatusPage() {
-  const params = useParams();
-  const router = useRouter();
-  const [scan, setScan] = useState<Scan | null>(null);
-  const [progress, setProgress] = useState<Progress>({});
-  const [error, setError] = useState("");
-  const [elapsed, setElapsed] = useState(0);
-  const activityRef = useRef<HTMLDivElement>(null);
+  const params = useParams()
+  const router = useRouter()
+  const scanId = params.id as string
 
-  useEffect(() => {
-    if (!scan?.created_at) return;
-    const raw = scan.created_at.endsWith("Z")
-      ? scan.created_at
-      : scan.created_at + "Z";
-    const createdAt = new Date(raw).getTime();
-    const update = () =>
-      setElapsed(Math.floor((Date.now() - createdAt) / 1000));
-    update();
-    const tick = setInterval(update, 1000);
-    return () => clearInterval(tick);
-  }, [scan?.created_at]);
-
-  useEffect(() => {
-    if (activityRef.current) {
-      activityRef.current.scrollTop = activityRef.current.scrollHeight;
-    }
-  }, [progress.recent_activity]);
-
-  useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const [scanRes, progressRes] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/scans/${params.id}`),
-          fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/scans/${params.id}/progress`
-          ),
-        ]);
-
-        if (!scanRes.ok) throw new Error("Scan not found");
-        const scanData = await scanRes.json();
-        setScan(scanData);
-
-        if (progressRes.ok) {
-          const progressData = await progressRes.json();
-          if (
-            progressData.progress &&
-            Object.keys(progressData.progress).length > 0
-          ) {
-            setProgress(progressData.progress);
-          }
-        }
-
-        if (scanData.status === "completed") {
-          setTimeout(() => router.push(`/results/${params.id}`), 2000);
-        } else if (scanData.status === "failed") {
-          setError("Scan failed. Please try again.");
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong");
-      }
-    };
-
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
-    return () => clearInterval(interval);
-  }, [params.id, router]);
+  const [scan, setScan] = useState<Scan | null>(null)
+  const [progress, setProgress] = useState<Progress>({})
+  const [error, setError] = useState("")
+  const [elapsed, setElapsed] = useState(0)
+  const [maxTokens, setMaxTokens] = useState(0)
+  const activityRef = useRef<HTMLDivElement>(null)
 
   const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-  };
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
+  }
 
   const formatBigNumber = (n: number) => {
-    if (n >= 1_000_000) {
-      return { value: (n / 1_000_000).toFixed(1), suffix: "M" };
-    }
-    if (n >= 1_000) {
-      return { value: (n / 1_000).toFixed(0), suffix: "K" };
-    }
-    return { value: String(n), suffix: "" };
-  };
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+    if (n >= 1_000) return `${Math.floor(n / 1_000)}K`
+    return String(n)
+  }
 
-  const severityColor = (s: string) => {
-    switch (s.toLowerCase()) {
-      case "critical":
-        return "bg-[var(--severity-critical)]/20 text-[var(--severity-critical)] border-[var(--severity-critical)]/30";
-      case "high":
-        return "bg-[var(--severity-high)]/20 text-[var(--severity-high)] border-[var(--severity-high)]/30";
-      case "medium":
-        return "bg-[var(--severity-medium)]/20 text-[var(--severity-medium)] border-[var(--severity-medium)]/30";
-      default:
-        return "bg-[var(--severity-low)]/20 text-[var(--severity-low)] border-[var(--severity-low)]/30";
+  const getPhaseIndex = (phaseName?: string) => {
+    // Map phase name from backend to index
+    const phaseMap: Record<string, number> = {
+      init: 0,
+      recon: 1,
+      probe: 2,
+      attack: 3,
+      analyze: 4,
+      report: 5,
     }
-  };
+    return phaseMap[phaseName || "init"] ?? 0
+  }
+
+  const getThreatColor = (severity: string) => {
+    const colors: Record<string, string> = {
+      critical: "var(--critical)",
+      high: "var(--high)",
+      medium: "var(--medium)",
+      low: "var(--low)",
+    }
+    return colors[severity.toLowerCase()] || "var(--text-muted)"
+  }
+
+  // Elapsed time counter
+  useEffect(() => {
+    if (!scan?.created_at) return
+    const raw = scan.created_at.endsWith("Z") ? scan.created_at : scan.created_at + "Z"
+    const createdAt = new Date(raw).getTime()
+    const update = () => setElapsed(Math.floor((Date.now() - createdAt) / 1000))
+    update()
+    const tick = setInterval(update, 1000)
+    return () => clearInterval(tick)
+  }, [scan?.created_at])
+
+  // Auto-scroll activity log
+  useEffect(() => {
+    if (activityRef.current) {
+      activityRef.current.scrollTop = activityRef.current.scrollHeight
+    }
+  }, [progress.recent_activity])
+
+  // Fetch scan and progress
+  const fetchData = useCallback(async () => {
+    try {
+      const [scanRes, progressRes] = await Promise.all([
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}`),
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/progress`),
+      ])
+
+      if (!scanRes.ok) throw new Error("Scan not found")
+      const scanData = await scanRes.json()
+      setScan(scanData)
+
+      if (progressRes.ok) {
+        const progressData = await progressRes.json()
+        if (progressData.progress && Object.keys(progressData.progress).length > 0) {
+          setProgress(progressData.progress)
+          // Track max tokens to prevent counter from decreasing
+          const newTokens = progressData.progress.input_tokens ?? 0
+          setMaxTokens(prev => Math.max(prev, newTokens))
+        }
+      }
+
+      if (scanData.status === "completed") {
+        setTimeout(() => router.push(`/results/${scanId}`), 2000)
+      } else if (scanData.status === "failed") {
+        setError("Scan failed. Please try again.")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong")
+    }
+  }, [scanId, router])
+
+  useEffect(() => {
+    fetchData()
+    const interval = setInterval(fetchData, 5000)
+    return () => clearInterval(interval)
+  }, [fetchData])
+
+  // Use maxTokens to ensure counter never decreases
+  const displayTokens = Math.max(maxTokens, progress.input_tokens ?? 0)
+  const currentPhase = getPhaseIndex(progress.current_phase)
+  const isComplete = scan?.status === "completed"
+  const isFailed = scan?.status === "failed"
+  const hasProgress = progress.agents !== undefined
+  const activeAgents = progress.active_agent_list ?? []
+  const recentActivity = progress.recent_activity ?? []
+  const findings = progress.findings_so_far ?? []
 
   if (error) {
     return (
-      <main className="min-h-screen bg-[var(--bg)]">
-        <Navbar />
-        <div className="pt-24 flex items-center justify-center p-4">
-          <div className="max-w-md w-full border border-[var(--severity-critical)]/30 bg-[var(--surface)] rounded-xl p-8 text-center">
-            <div className="w-12 h-12 rounded-full bg-[var(--severity-critical)]/10 flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="text-[var(--severity-critical)]" size={24} />
-            </div>
-            <h1 className="text-lg font-semibold text-[var(--text)] mb-2">
-              Scan Failed
-            </h1>
-            <p className="text-[var(--text-muted)] text-sm mb-6">{error}</p>
-            <a
-              href="/"
-              className="inline-block px-6 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--bg)] text-sm font-medium rounded-lg transition-colors"
-            >
-              Start New Scan
-            </a>
-          </div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--void)" }}>
+        <div className="text-center">
+          <AlertTriangle className="w-8 h-8 mx-auto mb-4" style={{ color: "var(--critical)" }} />
+          <p className="font-mono text-xs uppercase mb-4" style={{ color: "var(--text-muted)" }}>{error}</p>
+          <a
+            href="/"
+            className="inline-block px-6 py-2 rounded-[var(--radius-sm)] font-mono text-xs uppercase"
+            style={{ backgroundColor: "var(--cyan)", color: "var(--void)" }}
+          >
+            New Scan
+          </a>
         </div>
-      </main>
-    );
+      </div>
+    )
   }
 
-  const hasProgress = progress.agents !== undefined;
-  const vulnCount = progress.vulnerabilities_found ?? 0;
-  const inputTokens = progress.input_tokens ?? 0;
-  const activeAgents = progress.active_agent_list ?? [];
-  const recentActivity = progress.recent_activity ?? [];
-  const isComplete = scan?.status === "completed";
-
-  const phase =
-    inputTokens >= 900000
-      ? 5
-      : inputTokens >= 500000
-        ? 4
-        : inputTokens >= 200000
-          ? 3
-          : inputTokens >= 50000
-            ? 2
-            : inputTokens > 0
-              ? 1
-              : 0;
-
   return (
-    <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
-      <Navbar />
+    <div className="min-h-screen relative overflow-hidden" style={{ backgroundColor: "var(--void)" }}>
+      <StatusBar />
+      <GridOverlay dense />
+      <CornerMarkers />
 
-      {/* Scanning animation bar */}
-      {!isComplete && (
-        <div className="fixed top-16 left-0 right-0 h-0.5 bg-[var(--surface)] overflow-hidden z-40">
-          <div className="h-full w-1/3 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent animate-scan" />
-        </div>
+      {/* Scan line animation */}
+      {!isComplete && !isFailed && (
+        <div
+          className="fixed left-0 right-0 h-px pointer-events-none z-30 animate-scan-line"
+          style={{
+            background: "linear-gradient(90deg, transparent, var(--cyan-glow-intense), transparent)",
+            boxShadow: "0 0 30px var(--cyan-glow-intense)"
+          }}
+        />
       )}
 
-      <div className="max-w-5xl mx-auto px-4 pt-24 pb-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <div
-                className={`w-2 h-2 rounded-full ${
-                  isComplete
-                    ? "bg-[var(--success)]"
-                    : "bg-[var(--accent)] animate-pulse-slow"
-                }`}
-              />
-              <h1 className="text-lg font-semibold">
-                {isComplete
-                  ? "Penetration test complete"
-                  : "Penetration test active"}
-              </h1>
-            </div>
-            {scan && (
-              <p className="text-[var(--text-muted)] font-mono text-sm ml-5">
-                {scan.target_url}
-              </p>
-            )}
+      <main className="relative z-10 pt-16 min-h-screen">
+        {/* Top bar */}
+        <div
+          className="border-b px-6 py-3 flex items-center justify-between"
+          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)" }}
+        >
+          <div className="flex items-center gap-4">
+            <NullscanLogo size="sm" iconOnly />
+            <div className="h-4 w-px" style={{ backgroundColor: "var(--border)" }} />
+            <span className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Scan Active
+            </span>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-mono text-[var(--text-secondary)] tabular-nums">
-              {formatTime(elapsed)}
-            </p>
-            <p className="text-xs text-[var(--text-dim)]">elapsed</p>
+          <div className="flex items-center gap-6 font-mono text-[10px] uppercase tracking-wider">
+            <span style={{ color: "var(--text-dim)" }}>
+              ID: {scanId.slice(0, 8)}
+            </span>
+            <span style={{ color: "var(--cyan)" }}>{formatTime(elapsed)}</span>
           </div>
         </div>
 
-        {/* Phase indicators */}
-        <div className="flex gap-1 mb-8">
-          {PHASES.map((label, i) => (
-            <div key={i} className="flex-1">
-              <div
-                className={`h-1 rounded-full mb-2 transition-all duration-700 ${
-                  i <= phase ? "bg-[var(--accent)]" : "bg-[var(--border)]"
-                }`}
-              />
-              <p
-                className={`text-[11px] transition-colors duration-500 ${
-                  i === phase
-                    ? "text-[var(--accent)]"
-                    : i < phase
-                      ? "text-[var(--text-muted)]"
-                      : "text-[var(--text-dim)]"
-                }`}
-              >
-                {label}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        {/* Stats row */}
-        {hasProgress && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-              <p className="text-xs text-[var(--text-muted)] mb-1">
-                Active Agents
-              </p>
-              <p className="text-2xl font-bold tabular-nums">
-                {progress.active_agents ?? 0}
-                <span className="text-sm text-[var(--text-dim)] font-normal ml-1">
-                  / {progress.agents ?? 0}
-                </span>
-              </p>
-            </div>
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-              <p className="text-xs text-[var(--text-muted)] mb-1">
-                Tools Used
-              </p>
-              <p className="text-2xl font-bold tabular-nums font-mono">
-                {formatBigNumber(progress.tools ?? 0).value}
-                <span className="text-sm text-[var(--text-muted)] font-normal">
-                  {formatBigNumber(progress.tools ?? 0).suffix}
-                </span>
-              </p>
-            </div>
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-              <p className="text-xs text-[var(--text-muted)] mb-1">Tokens</p>
-              <p className="text-2xl font-bold tabular-nums font-mono">
-                {formatBigNumber(inputTokens).value}
-                <span className="text-sm text-[var(--text-muted)] font-normal">
-                  {formatBigNumber(inputTokens).suffix}
-                </span>
-              </p>
-            </div>
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-              <p className="text-xs text-[var(--text-muted)] mb-1">Findings</p>
-              <p
-                className={`text-2xl font-bold tabular-nums ${
-                  vulnCount > 0 ? "text-[var(--severity-critical)]" : ""
-                }`}
-              >
-                {vulnCount}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Vulnerability discoveries */}
-        {progress.findings_so_far && progress.findings_so_far.length > 0 && (
-          <div className="mb-6">
-            <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              Discovered Vulnerabilities
-            </h2>
-            <div className="space-y-2">
-              {progress.findings_so_far.map((f, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3 animate-fadeIn"
-                >
-                  <span
-                    className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border shrink-0 ${severityColor(
-                      f.severity
-                    )}`}
-                  >
-                    {f.severity}
-                  </span>
-                  <span className="text-sm text-[var(--text-secondary)]">
-                    {f.title}
+        <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[calc(100vh-8rem)]">
+          {/* Left Panel - Status & Agents */}
+          <div
+            className="lg:col-span-3 border-r p-6 space-y-6"
+            style={{ borderColor: "var(--border)" }}
+          >
+            {/* Target Info */}
+            <div className="space-y-4">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--text-dim)" }}>
+                  Target
+                </p>
+                <p className="font-mono text-sm truncate" style={{ color: "var(--text)" }}>
+                  {scan?.target_url || "Loading..."}
+                </p>
+              </div>
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--text-dim)" }}>
+                  Status
+                </p>
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`w-2 h-2 rounded-full ${!isComplete && !isFailed ? "animate-status-pulse" : ""}`}
+                    style={{ backgroundColor: isComplete ? "var(--low)" : isFailed ? "var(--critical)" : "var(--cyan)" }}
+                  />
+                  <span className="font-mono text-sm uppercase" style={{ color: isComplete ? "var(--low)" : isFailed ? "var(--critical)" : "var(--cyan)" }}>
+                    {isComplete ? "Complete" : isFailed ? "Failed" : "Scanning"}
                   </span>
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* War Room - Two panel layout */}
-        <div className="grid lg:grid-cols-5 gap-4 mb-6">
-          {/* Left panel: Active agents */}
-          <div className="lg:col-span-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-            <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              Active Agents
-            </h2>
-            {activeAgents.length > 0 ? (
-              <div className="space-y-2">
-                {activeAgents.slice(0, 5).map((agent, i) => (
-                  <div
-                    key={i}
-                    className={`flex items-start gap-3 bg-[var(--bg)] rounded-lg px-4 py-3 border-l-[3px] ${
-                      agent.status === "running"
-                        ? "border-l-[var(--accent)]"
-                        : "border-l-[var(--border)]"
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-sm font-medium text-[var(--text)]">
+            {/* Phase Progress */}
+            <div className="space-y-3">
+              <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--text-dim)" }}>
+                Scan Phase
+              </p>
+              <div className="space-y-1">
+                {PHASES.map((phase, i) => {
+                  const isActive = i === currentPhase
+                  const isCompleted = i < currentPhase
+                  return (
+                    <div
+                      key={phase.id}
+                      className="flex items-center gap-3 py-1"
+                    >
+                      <div
+                        className={`w-1.5 h-1.5 rounded-full ${isActive ? "animate-status-pulse" : ""}`}
+                        style={{
+                          backgroundColor: isActive ? "var(--cyan)" : isCompleted ? "var(--low)" : "var(--text-ghost)"
+                        }}
+                      />
+                      <span
+                        className="font-mono text-[11px] uppercase"
+                        style={{
+                          color: isActive ? "var(--cyan)" : isCompleted ? "var(--text-muted)" : "var(--text-ghost)"
+                        }}
+                      >
+                        {phase.short}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Active Agents */}
+            <div className="space-y-3">
+              <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--text-dim)" }}>
+                Active Agents ({progress.active_agents ?? 0}/{progress.agents ?? 0})
+              </p>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {activeAgents.length > 0 ? (
+                  activeAgents.slice(0, 5).map((agent, i) => (
+                    <div
+                      key={i}
+                      className="p-2 rounded-[var(--radius-sm)]"
+                      style={{
+                        backgroundColor: "var(--bg)",
+                        border: agent.status === "running" ? "1px solid var(--cyan)" : "1px solid var(--border)"
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <div
+                          className={`w-1.5 h-1.5 rounded-full ${agent.status === "running" ? "animate-status-pulse" : ""}`}
+                          style={{ backgroundColor: agent.status === "running" ? "var(--online)" : "var(--text-dim)" }}
+                        />
+                        <span className="font-mono text-[11px]" style={{ color: "var(--text)" }}>
                           {agent.label}
-                        </p>
-                        <span
-                          className={`flex items-center gap-1.5 text-[11px] ${
-                            agent.status === "running"
-                              ? "text-[var(--success)]"
-                              : "text-[var(--text-dim)]"
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              agent.status === "running"
-                                ? "bg-[var(--success)] animate-pulse"
-                                : "bg-[var(--text-dim)]"
-                            }`}
-                          />
-                          {agent.status}
                         </span>
                       </div>
                       {agent.description && (
-                        <p className="text-[13px] text-[var(--text-muted)] line-clamp-2">
+                        <p className="font-mono text-[10px] truncate" style={{ color: "var(--text-muted)" }}>
                           {agent.description}
                         </p>
                       )}
                     </div>
-                  </div>
-                ))}
-                {activeAgents.length > 5 && (
-                  <p className="text-xs text-[var(--text-dim)] text-center py-2">
-                    +{activeAgents.length - 5} more agents running
+                  ))
+                ) : (
+                  <p className="font-mono text-[10px]" style={{ color: "var(--text-ghost)" }}>
+                    {hasProgress ? "Deploying agents..." : "Initializing sandbox..."}
                   </p>
                 )}
               </div>
-            ) : (
-              <p className="text-sm text-[var(--text-dim)] py-4 text-center">
-                {hasProgress
-                  ? "Waiting for agents to spawn..."
-                  : "Initializing sandbox..."}
+            </div>
+
+            {/* Stats */}
+            <div className="space-y-3">
+              <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--text-dim)" }}>
+                Metrics
               </p>
-            )}
+              <div className="space-y-2">
+                {[
+                  { label: "Tools Executed", value: formatBigNumber(progress.tools ?? 0) },
+                  { label: "Tokens Processed", value: formatBigNumber(displayTokens) },
+                  { label: "Findings", value: String(progress.vulnerabilities_found ?? 0) },
+                ].map((stat) => (
+                  <div key={stat.label} className="flex items-center justify-between">
+                    <span className="font-mono text-[10px] uppercase" style={{ color: "var(--text-muted)" }}>
+                      {stat.label}
+                    </span>
+                    <span className="font-mono text-sm" style={{ color: "var(--text)" }}>
+                      {stat.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-          {/* Right panel: Event timeline */}
-          <div className="lg:col-span-2 bg-black border border-[var(--border)] rounded-xl p-4">
-            <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
-              Live Activity
-            </h2>
+          {/* Center Panel - Activity Log */}
+          <div
+            className="lg:col-span-6 border-r flex flex-col"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <div
+              className="px-6 py-3 border-b flex items-center justify-between"
+              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)" }}
+            >
+              <span className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Scan Log
+              </span>
+              <span className="font-mono text-[10px]" style={{ color: "var(--text-dim)" }}>
+                {recentActivity.length} events
+              </span>
+            </div>
             <div
               ref={activityRef}
-              className="h-64 overflow-y-auto space-y-1.5 font-mono text-xs"
+              className="flex-1 p-4 overflow-y-auto font-mono text-xs"
+              style={{ backgroundColor: "var(--bg)" }}
             >
-              <div className="flex items-start gap-2">
-                <span className="text-[var(--text-dim)] shrink-0">--:--</span>
-                <span className="text-[var(--text-muted)]">
-                  Nullscan engine initialized. Target: {scan?.target_url ?? "..."}
-                </span>
+              <div className="py-1" style={{ color: "var(--text-muted)" }}>
+                <span style={{ color: "var(--text-dim)" }}>000</span> Nullscan engine initialized. Target: {scan?.target_url ?? "..."}
               </div>
 
               {!hasProgress && (
-                <div className="flex items-start gap-2">
-                  <span className="text-[var(--text-dim)] shrink-0">--:--</span>
-                  <span className="text-[var(--accent)]/70 animate-pulse">
-                    Setting up sandbox and deploying agents...
-                  </span>
-                </div>
-              )}
-
-              {hasProgress && recentActivity.length === 0 && (
-                <div className="flex items-start gap-2">
-                  <span className="text-[var(--text-dim)] shrink-0">--:--</span>
-                  <span className="text-[var(--accent)]/70 animate-pulse">
-                    Agents deployed. Starting reconnaissance...
-                  </span>
+                <div className="py-1" style={{ color: "var(--cyan)" }}>
+                  <span style={{ color: "var(--text-dim)" }}>001</span> Setting up sandbox and deploying agents...
                 </div>
               )}
 
               {recentActivity.map((entry, i) => {
-                const time = entry.ts
-                  ? new Date(entry.ts).toLocaleTimeString("en-US", {
-                      hour12: false,
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "--:--";
+                const lineNum = entry.line ?? i + 1
                 const isFinding =
-                  entry.description.includes("VULN") ||
-                  entry.description.toLowerCase().includes("vulnerabilit");
+                  entry.description?.includes("VULN") ||
+                  entry.description?.toLowerCase().includes("vulnerability")
                 return (
                   <div
                     key={i}
-                    className="flex items-start gap-2 animate-fadeIn"
+                    className={`py-1 animate-fade-in-up ${isFinding ? "bg-[var(--critical)]/10 -mx-2 px-2 rounded" : ""}`}
+                    style={{
+                      color: isFinding ? "var(--critical)" :
+                             entry.description?.startsWith("[INIT]") || entry.description?.startsWith("[RECON]") ? "var(--cyan)" :
+                             entry.description?.startsWith("[SQLI]") || entry.description?.startsWith("[XSS]") ? "var(--medium)" :
+                             "var(--text-secondary)"
+                    }}
                   >
-                    <span className="text-[var(--accent)] shrink-0 tabular-nums">
-                      {time}
-                    </span>
-                    <span
-                      className={
-                        isFinding
-                          ? "text-[var(--severity-critical)] font-semibold"
-                          : entry.status === "running"
-                            ? "text-[var(--text-secondary)]"
-                            : "text-[var(--text-muted)]"
-                      }
-                    >
-                      {entry.description}
-                    </span>
+                    <span style={{ color: "var(--text-dim)" }}>{String(lineNum).padStart(3, "0")}</span>
+                    {" "}
+                    {entry.description}
                   </div>
-                );
+                )
               })}
 
-              {hasProgress && !isComplete && (
-                <div className="flex items-start gap-2">
-                  <span className="text-[var(--text-dim)] shrink-0">
-                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                  </span>
-                  <span className="text-[var(--accent)]/40 animate-blink">
-                    _
-                  </span>
+              {hasProgress && !isComplete && !isFailed && (
+                <div className="py-1 flex items-center gap-2" style={{ color: "var(--cyan)" }}>
+                  <span style={{ color: "var(--text-dim)" }}>{String(recentActivity.length + 1).padStart(3, "0")}</span>
+                  <span className="animate-status-pulse">_</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Panel - Findings */}
+          <div className="lg:col-span-3 flex flex-col">
+            <div
+              className="px-6 py-3 border-b flex items-center justify-between"
+              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)" }}
+            >
+              <span className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Threat Intelligence
+              </span>
+              <span
+                className="font-mono text-sm font-bold"
+                style={{ color: (progress.vulnerabilities_found ?? 0) > 0 ? "var(--critical)" : "var(--text-dim)" }}
+              >
+                {progress.vulnerabilities_found ?? 0}
+              </span>
+            </div>
+            <div className="flex-1 p-4 space-y-3" style={{ backgroundColor: "var(--bg)" }}>
+              {findings.length > 0 ? (
+                findings.map((finding, i) => (
+                  <div
+                    key={i}
+                    className="p-3 rounded-[var(--radius)] animate-fade-in-up"
+                    style={{
+                      backgroundColor: "var(--surface)",
+                      border: `1px solid ${getThreatColor(finding.severity)}40`,
+                      boxShadow: `0 0 20px ${getThreatColor(finding.severity)}20`
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle className="w-3 h-3" style={{ color: getThreatColor(finding.severity) }} />
+                      <span
+                        className="font-mono text-[10px] uppercase font-bold"
+                        style={{ color: getThreatColor(finding.severity) }}
+                      >
+                        {finding.severity}
+                      </span>
+                    </div>
+                    <p className="text-sm" style={{ color: "var(--text)" }}>
+                      {finding.title}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <p className="font-mono text-[10px] uppercase" style={{ color: "var(--text-ghost)" }}>
+                    No threats detected yet
+                  </p>
+                </div>
+              )}
+
+              {/* Completion State */}
+              {isComplete && (
+                <div
+                  className="p-4 rounded-[var(--radius)] text-center mt-4"
+                  style={{
+                    backgroundColor: "var(--surface)",
+                    border: "1px solid var(--low)"
+                  }}
+                >
+                  <CheckCircle className="w-6 h-6 mx-auto mb-2" style={{ color: "var(--low)" }} />
+                  <p className="font-mono text-xs uppercase mb-3" style={{ color: "var(--low)" }}>
+                    Scan Complete
+                  </p>
+                  <button
+                    onClick={() => router.push(`/results/${scanId}`)}
+                    className="flex items-center justify-center gap-2 w-full py-2 rounded-[var(--radius-sm)] font-mono text-xs uppercase"
+                    style={{ backgroundColor: "var(--cyan)", color: "var(--void)" }}
+                  >
+                    View Report
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
+              {/* Failed State */}
+              {isFailed && (
+                <div
+                  className="p-4 rounded-[var(--radius)] text-center mt-4"
+                  style={{
+                    backgroundColor: "var(--surface)",
+                    border: "1px solid var(--critical)"
+                  }}
+                >
+                  <AlertTriangle className="w-6 h-6 mx-auto mb-2" style={{ color: "var(--critical)" }} />
+                  <p className="font-mono text-xs uppercase mb-3" style={{ color: "var(--critical)" }}>
+                    Scan Failed
+                  </p>
+                  <a
+                    href="/"
+                    className="flex items-center justify-center gap-2 w-full py-2 rounded-[var(--radius-sm)] font-mono text-xs uppercase"
+                    style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                  >
+                    New Scan
+                  </a>
                 </div>
               )}
             </div>
           </div>
         </div>
-
-        {/* Completion message */}
-        {isComplete && (
-          <div className="bg-[var(--surface)] border border-[var(--success)]/30 rounded-xl p-4 mb-6 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[var(--success)]/10 flex items-center justify-center">
-              <Check className="text-[var(--success)]" size={16} />
-            </div>
-            <div>
-              <p className="font-medium">Scan complete</p>
-              <p className="text-sm text-[var(--text-muted)]">
-                Redirecting to results...
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Footer note */}
-        <p className="text-[var(--text-dim)] text-xs text-center">
-          This scan runs in our cloud. Close this tab anytime — we&apos;ll email
-          your report.
-        </p>
-      </div>
-    </main>
-  );
+      </main>
+    </div>
+  )
 }

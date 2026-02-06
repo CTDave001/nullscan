@@ -1,3 +1,8 @@
+"""
+Strix Runner - Clean integration following original Strix CLI pattern.
+Runs scans via Python API with progress tracking and report processing.
+"""
+
 import asyncio
 import csv
 import json
@@ -5,236 +10,302 @@ import os
 from pathlib import Path
 
 from app.config import settings
+from app.report_processor import process_scan_report
 
 
-def _get_scan_instructions(scan_mode: str) -> str:
-    """Return instructions that force the agent to actually test for vulnerabilities."""
-    if scan_mode == "quick":
-        return (
-            "After recon, you MUST actively test for at least these vulnerabilities: "
-            "SQL injection, XSS, and authentication issues. "
-            "Do NOT finish after only reconnaissance. "
-            "Use send_request to craft test payloads and verify responses. "
-            "IMPORTANT: Only report VERIFIED vulnerabilities. A 200 status code is NOT proof. "
-            "For XSS, confirm the payload appears unescaped in the response body. "
-            "For SQLi, confirm database errors or behavioral differences. "
-            "For auth bypass, confirm the response contains actual session tokens or user data. "
-            "Do NOT report based on status codes alone. False positives are unacceptable."
-        )
+def _categorize_action(tool_name: str, args: dict, cmd_lower: str = "") -> tuple[str, str]:
+    """Categorize action and create user-friendly description."""
+    import re
 
-    # Deep mode — phase structure only (persistent rules are in nullscan_rules skill)
-    return """MANDATORY: This scan has TWO phases. You MUST complete BOTH before finishing.
+    # Check for vulnerability-related keywords
+    vuln_keywords = ["vulnerability", "vuln", "exploit", "injection", "xss", "sqli", "found"]
+    is_vuln = any(k in cmd_lower for k in vuln_keywords)
 
-PHASE 1 - RECONNAISSANCE (max 30% of your effort):
-Subdomain enumeration, port scanning, technology fingerprinting. Keep it fast.
+    if tool_name == "terminal_execute":
+        cmd = args.get("command", "")
+        cmd_lower = cmd.lower()
 
-PHASE 2 - ACTIVE VULNERABILITY TESTING (min 70% of your effort):
-This is the MAIN purpose of the scan. You MUST test for ALL of these:
-1. SQL Injection  2. XSS  3. Authentication bypass  4. IDOR
-5. SSRF  6. Directory traversal  7. Security headers
+        # Categorize based on command content
+        if any(x in cmd_lower for x in ["nmap", "masscan", "naabu"]):
+            if "443" in cmd or "https" in cmd:
+                return "[RECON]", "Port scanning HTTPS services"
+            elif "80" in cmd or "http" in cmd:
+                return "[RECON]", "Port scanning HTTP services"
+            return "[RECON]", "Scanning for open ports"
 
-For EACH test: use send_request or browser_action to send real payloads. Analyze the response.
+        if any(x in cmd_lower for x in ["curl", "wget", "httpx"]):
+            # Extract URL/path if present
+            urls = re.findall(r'https?://[^\s"\']+', cmd)
+            if urls:
+                url = urls[0]
+                # Get domain or path
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url)
+                    path = parsed.path if parsed.path and parsed.path != "/" else parsed.netloc
+                    path = path[:35]
+                    return "[PROBE]", f"Testing {path}"
+                except:
+                    pass
+            return "[PROBE]", "Fetching HTTP response"
 
-CRITICAL RULES:
-- Do NOT finish with only recon results
-- Do NOT skip vulnerability testing because recon found nothing interesting
-- Every endpoint found in recon MUST be tested
-- If a tool fails, use python_action or send_request as fallback
-- Follow all nullscan_rules — they are loaded in your system prompt"""
+        if any(x in cmd_lower for x in ["nuclei"]):
+            return "[SCAN]", "Running Nuclei vulnerability templates"
 
+        if any(x in cmd_lower for x in ["nikto"]):
+            return "[SCAN]", "Running Nikto web scanner"
 
-def _classify_command(cmd: str) -> str:
-    """Turn a raw shell command into a clear, non-technical description."""
-    cmd_lower = cmd.lower()
+        if any(x in cmd_lower for x in ["wpscan"]):
+            return "[SCAN]", "Scanning WordPress installation"
 
-    # Subdomain / DNS tools
-    if any(t in cmd_lower for t in ("subfinder", "amass", "assetfinder", "findomain")):
-        return "Discovering subdomains and related hosts"
-    if any(t in cmd_lower for t in ("dnsx", "dig ", "nslookup", "host ")):
-        return "Performing DNS lookups to map infrastructure"
-    if "zone transfer" in cmd_lower or "axfr" in cmd_lower:
-        return "Checking for DNS zone transfer vulnerabilities"
+        if any(x in cmd_lower for x in ["sqlmap"]):
+            if is_vuln:
+                return "[VULN]", "SQL Injection vulnerability confirmed"
+            return "[SQLI]", "Testing for SQL injection"
 
-    # Port / network scanning
-    if any(t in cmd_lower for t in ("naabu", "nmap", "masscan")):
-        return "Scanning for open ports and exposed services"
+        if any(x in cmd_lower for x in ["subfinder", "amass"]):
+            return "[RECON]", "Discovering subdomains"
 
-    # Web fuzzing / discovery
-    if any(t in cmd_lower for t in ("ffuf", "gobuster", "dirsearch", "feroxbuster")):
-        return "Searching for hidden pages and directories"
-    if "wordlist" in cmd_lower and ("mkdir" in cmd_lower or "echo" in cmd_lower):
-        return "Preparing wordlists for endpoint discovery"
+        if "ffuf" in cmd_lower or "gobuster" in cmd_lower or "dirb" in cmd_lower:
+            return "[RECON]", "Fuzzing directories and files"
 
-    # HTTP tools
-    if any(t in cmd_lower for t in ("curl ", "wget ", "httpx")):
-        return "Probing HTTP endpoints for responses"
-    if "nuclei" in cmd_lower:
-        return "Running vulnerability signature checks"
+        if any(x in cmd_lower for x in ["grep", "awk", "sed"]):
+            return "[ANALYZE]", "Processing scan results"
 
-    # SSL / TLS
-    if any(t in cmd_lower for t in ("sslscan", "testssl", "openssl")):
-        return "Analyzing SSL/TLS certificate security"
+        if any(x in cmd_lower for x in ["cat", "head", "tail"]):
+            return "[ANALYZE]", "Reviewing collected data"
 
-    # Git / source exposure
-    if ".git" in cmd_lower:
-        return "Checking for exposed source code repositories"
+        if "echo" in cmd_lower and "workspace" in cmd_lower:
+            # Skip noisy workspace setup commands
+            return "[INIT]", "Setting up test environment"
 
-    # Generic analysis
-    if any(t in cmd_lower for t in ("grep", "awk", "sed", "cat ", "jq ")):
-        return "Analyzing collected scan data"
-    if any(t in cmd_lower for t in ("python", "pip ")):
-        return "Running automated security analysis"
+        if "mkdir" in cmd_lower:
+            return "[INIT]", "Creating workspace directories"
 
-    return "Executing security test in sandbox"
+        if "dns" in cmd_lower or "dig" in cmd_lower or "nslookup" in cmd_lower:
+            return "[RECON]", "Performing DNS lookups"
 
+        if "cd " in cmd_lower and ("echo" in cmd_lower or "set -e" in cmd_lower):
+            return "[INIT]", "Initializing test environment"
 
-def _describe_tool(tool_name: str, args: dict) -> str | None:
-    """Convert a Strix tool execution into a clear, user-friendly description."""
-    # Skip internal orchestration tools — users don't need to see these
-    SKIP = {
-        "scan_start_info", "subagent_start_info", "agent_start_info",
-        "create_agent", "send_message_to_agent", "agent_finish",
-        "wait_for_message", "view_agent_graph",
-        "think",
-        "create_todo", "list_todos", "update_todo",
-        "mark_todo_done", "mark_todo_pending", "delete_todo",
-        "create_note", "list_notes", "update_note", "delete_note",
-        "finish_scan",
-        "naabu",  # raw tool invocations get a terminal_execute too
-    }
-    if tool_name in SKIP:
-        return None
-
-    url = args.get("url", args.get("target_url", args.get("endpoint", "")))
+        return "[EXEC]", "Running security test"
 
     if tool_name == "browser_action":
         action = args.get("action", "")
-        target = args.get("url", "")
-        if action == "goto" and target:
-            # Extract path for readability
-            from urllib.parse import urlparse
-            parsed = urlparse(target)
-            page = parsed.path or "/"
-            return f"Loading and analyzing {parsed.netloc}{page}"
+        url = args.get("url", "")
+
+        if action == "goto":
+            if url:
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url)
+                    path = parsed.path if parsed.path and parsed.path != "/" else "/"
+                    if "login" in url.lower() or "auth" in url.lower():
+                        return "[AUTH]", f"Testing login page"
+                    if "admin" in url.lower():
+                        return "[AUTH]", f"Probing admin interface"
+                    if "api" in url.lower():
+                        return "[PROBE]", f"Testing API endpoint"
+                    return "[PROBE]", f"Navigating to {path[:30]}"
+                except:
+                    pass
+            return "[PROBE]", "Loading target page"
+
         if action == "click":
-            return "Testing interactive elements for vulnerabilities"
-        if action in ("type", "fill"):
-            return "Injecting test payloads into input fields"
+            return "[PROBE]", "Clicking page element"
+
+        if action == "fill":
+            return "[PROBE]", "Injecting test payload into form"
+
         if action == "screenshot":
-            return "Documenting current page state"
-        if action == "scroll":
-            return "Exploring page content"
-        return "Analyzing page structure and behavior"
+            return "[RECON]", "Capturing page screenshot"
 
-    if tool_name == "terminal_execute":
-        command = args.get("command", "")
-        if command:
-            return _classify_command(command)
-        return "Executing security test in sandbox"
+        if action == "launch":
+            return "[INIT]", "Launching browser"
 
-    if tool_name == "python_action":
-        return "Running automated vulnerability analysis"
+        if action == "view_source":
+            return "[RECON]", "Analyzing page source code"
+
+        return "[PROBE]", f"Browser: {action}"
 
     if tool_name == "send_request":
         method = args.get("method", "GET")
-        target = url or args.get("path", "")
-        if target:
-            from urllib.parse import urlparse
-            parsed = urlparse(target)
-            path = parsed.path or "/"
-            if method.upper() == "POST":
-                return f"Testing form submission on {path}"
-            return f"Probing endpoint {path} for vulnerabilities"
-        return "Testing HTTP endpoint security"
+        url = args.get("url", "")
+        body = str(args.get("body", "")).lower()
 
-    if tool_name == "repeat_request":
-        return "Replaying modified request to verify vulnerability"
+        # Check for attack patterns
+        if any(x in body for x in ["'", '"', "union", "select", "--"]):
+            return "[SQLI]", f"Testing SQL injection via {method}"
+        if any(x in body for x in ["<script", "javascript:", "onerror"]):
+            return "[XSS]", f"Testing XSS via {method}"
+        if any(x in body for x in ["../", "..\\", "/etc/passwd"]):
+            return "[PATH]", f"Testing path traversal via {method}"
+
+        if url:
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(url)
+                path = parsed.path[:25] if parsed.path else "/"
+                if "user" in url.lower() or "profile" in url.lower():
+                    return "[IDOR]", f"{method} testing user access control"
+                if "admin" in url.lower():
+                    return "[AUTH]", f"{method} testing admin access"
+                return "[PROBE]", f"{method} request to {path}"
+            except:
+                pass
+
+        return "[PROBE]", f"Sending {method} request"
+
+    if tool_name == "python_action":
+        return "[ANALYZE]", "Running analysis script"
+
+    if tool_name == "naabu":
+        return "[RECON]", "Fast port scanning with Naabu"
 
     if tool_name == "list_requests":
-        return "Reviewing intercepted network traffic"
+        return "[ANALYZE]", "Reviewing captured HTTP traffic"
 
     if tool_name == "view_request":
-        return "Inspecting request and response headers"
+        return "[ANALYZE]", "Inspecting HTTP request details"
 
-    if tool_name == "scope_rules":
-        return "Defining scan boundaries"
+    if tool_name == "create_note":
+        return "[NOTE]", "Recording security finding"
 
-    if tool_name == "list_sitemap":
-        return "Mapping all discovered application endpoints"
-
-    if tool_name == "view_sitemap_entry":
-        return "Analyzing endpoint parameters and behavior"
-
-    if tool_name == "str_replace_editor":
-        return "Crafting custom test payload"
-
-    if tool_name == "list_files":
-        return "Organizing scan results"
-
-    if tool_name == "search_files":
-        return "Cross-referencing scan findings"
-
-    if tool_name == "web_search":
-        query = args.get("query", "")
-        if query:
-            return f"Researching known vulnerabilities for {query[:40]}"
-        return "Researching known vulnerability databases"
-
-    if tool_name == "create_vulnerability_report":
-        title = args.get("title", "")
-        severity = args.get("severity", "")
-        if title:
-            sev = f" ({severity})" if severity else ""
-            return f"Confirmed finding: {title[:50]}{sev}"
-        return "Documenting confirmed vulnerability"
-
-    return None  # Hide anything we don't recognize rather than showing junk
+    # Default - clean up tool name
+    clean_name = tool_name.replace("_", " ").title()
+    return "[EXEC]", clean_name
 
 
-def _humanize_agent(agent_data: dict) -> dict | None:
-    """Convert raw agent data into something meaningful for a user.
+def _describe_tool_execution(tool_name: str, args: dict) -> str:
+    """Create a user-friendly log entry for a tool execution."""
+    category, description = _categorize_action(tool_name, args)
+    return f"{category} {description}"
 
-    Uses the agent's actual task description — that's the real info.
-    Just cleans up the label and strips internal junk.
-    """
-    import re
-    name = agent_data.get("name", "")
-    task = agent_data.get("task", "")
-    status = agent_data.get("status", "running")
 
-    # Skip the root orchestrator
-    if name.lower() in ("root agent", "root"):
-        return None
+def _get_friendly_agent_name(agent_id: str, task: str, index: int) -> str:
+    """Generate a user-friendly agent name based on task or index."""
+    task_lower = task.lower() if task else ""
 
-    # Build a clean label from the agent name:
-    # "Subdomain Enumeration Agent for FormVault" -> "Subdomain Enumeration"
-    label = name
-    # Remove "Agent" suffix
-    label = re.sub(r'\s*Agent\s*$', '', label, flags=re.IGNORECASE)
-    # Remove "for <target>" suffix
-    label = re.sub(r'\s+for\s+\S+.*$', '', label, flags=re.IGNORECASE)
-    label = label.strip()
-    if not label:
-        label = "Security Analysis"
+    # Try to infer role from task description
+    if any(x in task_lower for x in ["recon", "discover", "enumerate", "subdomain", "dns"]):
+        return "Recon Agent"
+    if any(x in task_lower for x in ["sql", "injection", "database"]):
+        return "SQLi Scanner"
+    if any(x in task_lower for x in ["xss", "script", "cross-site"]):
+        return "XSS Scanner"
+    if any(x in task_lower for x in ["auth", "login", "session", "password"]):
+        return "Auth Tester"
+    if any(x in task_lower for x in ["api", "endpoint", "rest"]):
+        return "API Prober"
+    if any(x in task_lower for x in ["ssrf", "request forgery"]):
+        return "SSRF Scanner"
+    if any(x in task_lower for x in ["path", "traversal", "directory"]):
+        return "Path Traversal"
+    if any(x in task_lower for x in ["header", "security header", "cors"]):
+        return "Header Analyzer"
+    if any(x in task_lower for x in ["port", "scan", "service"]):
+        return "Port Scanner"
+    if any(x in task_lower for x in ["browser", "click", "form"]):
+        return "Browser Agent"
 
-    # The task field is the real description — use it directly, just truncate
-    desc = task[:120] if task else ""
+    # Fallback to generic numbered names
+    names = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel"]
+    return f"Agent {names[index % len(names)]}"
 
-    return {
-        "label": label,
-        "description": desc,
-        "status": status,
-    }
+
+def _get_agent_thought(tool_name: str, args: dict, task: str) -> str:
+    """Generate a human-readable thought about what the agent is doing."""
+    if tool_name == "terminal_execute":
+        cmd = args.get("command", "")
+        cmd_lower = cmd.lower()
+
+        if "nmap" in cmd_lower or "masscan" in cmd_lower:
+            return "Scanning for open ports and services..."
+        if "curl" in cmd_lower or "wget" in cmd_lower:
+            return "Fetching and analyzing HTTP responses..."
+        if "nuclei" in cmd_lower:
+            return "Running vulnerability templates..."
+        if "sqlmap" in cmd_lower:
+            return "Testing SQL injection vectors..."
+        if "subfinder" in cmd_lower or "amass" in cmd_lower:
+            return "Discovering subdomains..."
+        if "grep" in cmd_lower or "cat" in cmd_lower:
+            return "Analyzing collected data..."
+        return "Executing security test..."
+
+    if tool_name == "browser_action":
+        action = args.get("action", "")
+        if action == "goto":
+            return "Navigating to target page..."
+        if action == "click":
+            return "Interacting with page elements..."
+        if action == "fill":
+            return "Testing form inputs with payloads..."
+        if action == "screenshot":
+            return "Capturing page state for analysis..."
+        return "Performing browser interaction..."
+
+    if tool_name == "send_request":
+        method = args.get("method", "GET")
+        return f"Sending {method} request to test endpoint..."
+
+    if tool_name == "view_request":
+        return "Analyzing captured HTTP traffic..."
+
+    if tool_name == "list_requests":
+        return "Reviewing intercepted requests..."
+
+    # Fallback to task if available
+    if task:
+        return task[:60] + "..." if len(task) > 60 else task
+
+    return "Analyzing target..."
+
+
+def _determine_scan_phase(tracer, vulnerabilities: list) -> str:
+    """Determine current scan phase based on tool activity."""
+    # Analyze recent tool executions to determine phase
+    tools_used = set()
+    for exec_data in tracer.tool_executions.values():
+        tool_name = exec_data.get("tool_name", "")
+        args = exec_data.get("args", {})
+        tools_used.add(tool_name)
+
+        # Check command content for phase hints
+        if tool_name == "terminal_execute":
+            cmd = args.get("command", "").lower()
+            if any(x in cmd for x in ["sqlmap", "union", "select"]):
+                tools_used.add("sqli_test")
+            if any(x in cmd for x in ["nuclei", "nikto"]):
+                tools_used.add("vuln_scan")
+            if any(x in cmd for x in ["nmap", "masscan", "subfinder"]):
+                tools_used.add("recon_tool")
+
+    # Determine phase based on tools used
+    has_recon = any(x in tools_used for x in ["naabu", "recon_tool", "list_requests"])
+    has_probe = "send_request" in tools_used or "browser_action" in tools_used
+    has_attack = any(x in tools_used for x in ["sqli_test", "vuln_scan"])
+    has_vulns = len(vulnerabilities) > 0
+
+    # Return most advanced phase
+    if has_vulns:
+        return "analyze"
+    if has_attack:
+        return "attack"
+    if has_probe:
+        return "probe"
+    if has_recon:
+        return "recon"
+    return "init"
+
+
+# Track max tokens to ensure counter never decreases
+_max_tokens_seen = {}
 
 
 async def _update_progress(scan_id: str, tracer, vulnerabilities: list):
-    """Write scan progress to database every few seconds."""
+    """Write scan progress to database periodically."""
     from app.database import database, scans
-
-    seen_exec_ids: set[int] = set()
-    activity_log: list[dict] = []
-    last_token_count = 0
-    stall_ticks = 0  # How many 5s ticks with no token change + all waiting
 
     while True:
         await asyncio.sleep(5)
@@ -242,79 +313,98 @@ async def _update_progress(scan_id: str, tracer, vulnerabilities: list):
             stats = tracer.get_total_llm_stats()
             total = stats.get("total", {})
 
-            # Debug: dump unique tool names and agent statuses
-            tool_names = set(
-                e.get("tool_name", "") for e in tracer.tool_executions.values()
-            )
-            agent_info = {
-                a.get("name", "?"): a.get("status", "?")
-                for a in tracer.agents.values()
-            }
+            # Track max tokens (never decrease)
             current_tokens = total.get("input_tokens", 0)
-            print(f"[progress] tokens={current_tokens} tools={tool_names} agents={agent_info}", flush=True)
+            if scan_id not in _max_tokens_seen:
+                _max_tokens_seen[scan_id] = 0
+            _max_tokens_seen[scan_id] = max(_max_tokens_seen[scan_id], current_tokens)
+            tokens_to_show = _max_tokens_seen[scan_id]
 
-            # Deadlock detection: all agents waiting + no token progress
-            statuses = [a.get("status", "") for a in tracer.agents.values()]
-            any_running = any(s == "running" for s in statuses)
-            all_done = all(s == "completed" for s in statuses)
-
-            if not any_running and not all_done and current_tokens == last_token_count and len(statuses) > 1:
-                stall_ticks += 1
-                if stall_ticks == 6:  # 30 seconds
-                    print(f"[deadlock] Warning: all agents waiting, no progress for 30s", flush=True)
-                if stall_ticks >= 12:  # 60 seconds
-                    print(f"[deadlock] Agents stalled for 60s — waiting timeouts will auto-resume them", flush=True)
-            else:
-                stall_ticks = 0
-
-            last_token_count = current_tokens
-
-            # Build active agents list (running or waiting = still working)
-            active_agents = []
-            for agent_data in list(tracer.agents.values()):
-                status = agent_data.get("status", "")
+            # Count active agents and build agent list
+            active_count = 0
+            active_agent_list = []
+            agent_index = 0
+            for agent_id, a in tracer.agents.items():
+                status = a.get("status", "unknown")
                 if status in ("running", "waiting"):
-                    humanized = _humanize_agent(agent_data)
-                    if humanized:
-                        active_agents.append(humanized)
+                    active_count += 1
 
-            # Build activity log from new tool executions
-            for exec_id, exec_data in list(tracer.tool_executions.items()):
-                if exec_id in seen_exec_ids:
-                    continue
-                seen_exec_ids.add(exec_id)
+                    # Get agent's task for naming
+                    task = a.get("task", "")
+                    tool_execs = a.get("tool_executions", [])
 
-                tool_name = exec_data.get("tool_name", "")
-                args = exec_data.get("args", {})
-                description = _describe_tool(tool_name, args)
-                if description:
-                    activity_log.append({
-                        "ts": exec_data.get("started_at", ""),
+                    # Generate friendly name
+                    agent_name = _get_friendly_agent_name(agent_id, task, agent_index)
+                    agent_index += 1
+
+                    # Generate thought/description
+                    description = "Analyzing target..."
+                    if tool_execs:
+                        last_exec_id = tool_execs[-1]
+                        last_exec = tracer.tool_executions.get(last_exec_id, {})
+                        tool_name = last_exec.get("tool_name", "")
+                        args = last_exec.get("args", {})
+                        description = _get_agent_thought(tool_name, args, task)
+
+                    active_agent_list.append({
+                        "label": agent_name,
                         "description": description,
-                        "status": exec_data.get("status", "running"),
+                        "status": status,
                     })
 
-            # Keep last 30 activity entries
-            recent_activity = activity_log[-30:]
+            # Determine current phase based on activity
+            phase = _determine_scan_phase(tracer, vulnerabilities)
+
+            # Build activity log from recent tool executions
+            all_activity = []
+            skip_tools = {
+                "think", "create_agent", "send_message_to_agent",
+                "wait_for_message", "agent_finish", "finish_scan",
+                "create_todo", "list_todos", "update_todo",
+                "subagent_start_info", "scan_start_info",
+            }
+
+            for exec_data in tracer.tool_executions.values():
+                tool_name = exec_data.get("tool_name", "")
+                if tool_name in skip_tools:
+                    continue
+
+                args = exec_data.get("args", {})
+                desc = _describe_tool_execution(tool_name, args)
+
+                all_activity.append({
+                    "ts": exec_data.get("started_at", ""),
+                    "description": desc,
+                    "status": exec_data.get("status", "running"),
+                })
+
+            # Sort by timestamp and take last 15
+            all_activity.sort(key=lambda x: x["ts"])
+            total_activity = len(all_activity)
+            recent_activity = all_activity[-15:]
+
+            # Add line numbers (offset from total)
+            start_num = max(1, total_activity - len(recent_activity) + 1)
+            for i, entry in enumerate(recent_activity):
+                entry["line"] = start_num + i
 
             progress = {
                 "agents": len(tracer.agents),
-                "active_agents": len(active_agents),
+                "active_agents": active_count,
+                "active_agent_list": active_agent_list,
                 "tools": tracer.get_real_tool_count(),
-                "input_tokens": total.get("input_tokens", 0),
+                "input_tokens": tokens_to_show,  # Use cumulative max
                 "output_tokens": total.get("output_tokens", 0),
                 "cost": total.get("cost", 0.0),
                 "vulnerabilities_found": len(vulnerabilities),
                 "findings_so_far": [
-                    {
-                        "title": v.get("title", "Unknown"),
-                        "severity": v.get("severity", "medium"),
-                    }
+                    {"title": v.get("title", ""), "severity": v.get("severity", "")}
                     for v in vulnerabilities
                 ],
-                "active_agent_list": active_agents[:5],
-                "recent_activity": recent_activity,
+                "recent_activity": recent_activity[-15:],
+                "current_phase": phase,
             }
+
             await database.execute(
                 scans.update()
                 .where(scans.c.id == scan_id)
@@ -323,30 +413,34 @@ async def _update_progress(scan_id: str, tracer, vulnerabilities: list):
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            print(f"[progress] Error updating progress: {e}", flush=True)
-            import traceback
-            traceback.print_exc()
+            print(f"[progress] Error: {e}", flush=True)
 
 
-async def run_strix_scan_async(target_url: str, scan_type: str = "quick", scan_id: str = "") -> dict:
+async def run_strix_scan_async(
+    target_url: str,
+    scan_type: str = "quick",
+    scan_id: str = ""
+) -> dict:
     """
-    Run Strix scan using its Python API directly (no CLI/subprocess).
+    Run Strix scan using Python API (follows original CLI pattern).
     Returns parsed results or error dict.
     """
-    if scan_type == "quick":
-        scan_mode = "quick"
-    else:
+    # Configure scan mode and iterations per tier
+    if scan_type == "pro":
+        scan_mode = "standard"
+        os.environ["STRIX_LLM"] = "openai/gpt-5.2"
+        max_iterations = 300
+    elif scan_type == "deep":
         scan_mode = "deep"
-
-    # Set env vars that Strix reads via its Config class
-    os.environ["STRIX_LLM"] = (
-        settings.strix_llm_quick if scan_type == "quick" else settings.strix_llm_deep
-    )
+        os.environ["STRIX_LLM"] = "openai/gpt-5.2"
+        max_iterations = 500
+    else:
+        scan_mode = "quick"
+        os.environ["STRIX_LLM"] = "openai/gpt-5.2"
+        max_iterations = 50
     os.environ["LLM_API_KEY"] = settings.llm_api_key
-    # Reduce agent wait timeout from 600s to 120s to prevent deadlocks
-    os.environ["STRIX_AGENT_WAIT_TIMEOUT"] = "120"
-    # Cap max agents to prevent runaway spawning
-    os.environ["STRIX_MAX_AGENTS"] = "20"
+
+    progress_task = None
 
     try:
         from strix.agents.StrixAgent import StrixAgent
@@ -357,61 +451,59 @@ async def run_strix_scan_async(target_url: str, scan_type: str = "quick", scan_i
         from strix.telemetry.tracer import Tracer, set_global_tracer
 
         apply_saved_config()
-        print(f"[strix] Config applied, starting scan for {target_url}")
+        print(f"[strix] Starting {scan_mode} scan for {target_url} (max {max_iterations} iterations)")
 
-        # Build target info the same way Strix CLI does
+        # Build target info (same as Strix CLI)
         target_type, target_details = infer_target_type(target_url)
-        targets_info = [
-            {
-                "type": target_type,
-                "details": target_details,
-                "original": target_url,
-            }
-        ]
+        targets_info = [{
+            "type": target_type,
+            "details": target_details,
+            "original": target_url,
+        }]
 
         run_name = generate_run_name(targets_info)
 
-        # Set up tracer (required by Strix internals)
-        tracer = Tracer(run_name)
+        # Configure scan (following CLI pattern)
         scan_config = {
             "scan_id": run_name,
             "targets": targets_info,
-            "user_instructions": _get_scan_instructions(scan_mode),
+            "user_instructions": "",
             "run_name": run_name,
         }
+
+        # Set up tracer
+        tracer = Tracer(run_name)
         tracer.set_scan_config(scan_config)
         set_global_tracer(tracer)
 
-        # Collect vulnerabilities as they're found
+        # Collect vulnerabilities via callback
         vulnerabilities = []
 
         def on_vulnerability(report: dict) -> None:
             vulnerabilities.append(report)
+            print(f"[strix] Vulnerability found: {report.get('title', 'Unknown')}")
 
         tracer.vulnerability_found_callback = on_vulnerability
 
-        # Start progress updater
-        progress_task = None
+        # Start progress tracking
         if scan_id:
             progress_task = asyncio.create_task(
                 _update_progress(scan_id, tracer, vulnerabilities)
             )
 
-        # Create agent and run scan
-        llm_config = LLMConfig(
-            scan_mode=scan_mode,
-            skills=["nullscan_rules"],
-        )
+        # Create agent and run scan (following CLI pattern)
+        llm_config = LLMConfig(scan_mode=scan_mode)
         agent_config = {
             "llm_config": llm_config,
-            "max_iterations": 300,
+            "max_iterations": max_iterations,
             "non_interactive": True,
         }
 
-        print(f"[strix] Tracer and progress task created, launching agent...")
+        print(f"[strix] Launching agent...")
         agent = StrixAgent(agent_config)
         result = await agent.execute_scan(scan_config)
 
+        # Check for scan errors
         if isinstance(result, dict) and not result.get("success", True):
             error_msg = result.get("error", "Unknown error")
             details = result.get("details", "")
@@ -425,10 +517,10 @@ async def run_strix_scan_async(target_url: str, scan_type: str = "quick", scan_i
                 "findings": [],
             }
 
-        # Parse results from strix_runs/ directory
+        # Parse results from output directory
         findings = parse_strix_run_dir(run_name)
 
-        # Also include any vulnerabilities reported via callback
+        # Include callback vulnerabilities if no file-based findings
         if not findings and vulnerabilities:
             findings = [
                 {
@@ -443,21 +535,36 @@ async def run_strix_scan_async(target_url: str, scan_type: str = "quick", scan_i
                 for v in vulnerabilities
             ]
 
-        # Filter out non-findings (severity NONE or explicitly "no vulnerability")
+        # Filter non-findings
         findings = [f for f in findings if _is_real_finding(f)]
 
         if progress_task:
             progress_task.cancel()
 
+        # Process markdown report for structured output
+        structured_report = None
+        run_dir = Path(f"strix_runs/{run_name}")
+        report_path = run_dir / "penetration_test_report.md"
+        if report_path.exists():
+            try:
+                markdown_content = report_path.read_text(encoding="utf-8")
+                print(f"[strix] Processing report ({len(markdown_content)} chars)...")
+                structured_report = process_scan_report(markdown_content, target_url)
+                print(f"[strix] Structured report extracted")
+            except Exception as e:
+                print(f"[strix] Warning: Report processing failed: {e}")
+
         tracer.cleanup()
         cleanup_runtime()
 
-        return {"findings": findings}
+        result = {"findings": findings}
+        if structured_report:
+            result["structured_report"] = structured_report
+        return result
 
     except Exception as e:
         if progress_task:
             progress_task.cancel()
-        # Clean up on error
         try:
             from strix.runtime import cleanup_runtime
             cleanup_runtime()
@@ -465,18 +572,18 @@ async def run_strix_scan_async(target_url: str, scan_type: str = "quick", scan_i
             pass
         return {
             "error": "execution_failed",
-            "message": str(e),
+            "message": str(e)[:2000],
             "findings": [],
         }
 
 
 def run_strix_scan(target_url: str, scan_type: str = "quick") -> dict:
-    """Sync wrapper for the async scan function."""
+    """Sync wrapper for async scan function."""
     return asyncio.run(run_strix_scan_async(target_url, scan_type))
 
 
 def parse_strix_run_dir(run_name: str) -> list[dict]:
-    """Parse Strix output from strix_runs/<run_name>/vulnerabilities/."""
+    """Parse Strix output from strix_runs/<run_name>/."""
     findings = []
     run_dir = Path(f"strix_runs/{run_name}")
 
@@ -526,7 +633,7 @@ def parse_vulnerability_file(vuln_dir: Path, csv_row: dict) -> dict | None:
 
 
 def parse_vulnerability_md(md_file: Path) -> dict | None:
-    """Parse a Strix vulnerability markdown report into structured data."""
+    """Parse a Strix vulnerability markdown report."""
     try:
         content = md_file.read_text(encoding="utf-8")
     except Exception:
@@ -540,49 +647,40 @@ def parse_vulnerability_md(md_file: Path) -> dict | None:
         "reproduction_steps": "",
         "poc": "",
         "fix_guidance": "",
-        "owasp_category": "",
     }
 
+    # Extract title from first heading
     for line in content.split("\n"):
         if line.startswith("# "):
             finding["title"] = line[2:].strip()
             break
 
-    sections = split_markdown_sections(content)
-
+    # Parse sections
+    sections = _split_markdown_sections(content)
     for heading, body in sections.items():
-        heading_lower = heading.lower()
-        if "severity" in heading_lower:
+        h = heading.lower()
+        if "severity" in h:
             finding["severity"] = normalize_severity(body.strip().split("\n")[0])
-        elif "endpoint" in heading_lower or "target" in heading_lower:
+        elif "endpoint" in h or "target" in h:
             finding["endpoint"] = body.strip().split("\n")[0]
-        elif "impact" in heading_lower:
+        elif "impact" in h:
             finding["impact"] = body.strip()
-        elif "description" in heading_lower:
-            if not finding["impact"]:
-                finding["impact"] = body.strip()
-        elif "proof of concept" in heading_lower or "poc" in heading_lower:
+        elif "description" in h and not finding["impact"]:
+            finding["impact"] = body.strip()
+        elif "proof of concept" in h or "poc" in h:
             finding["poc"] = body.strip()
-        elif "technical analysis" in heading_lower:
+        elif "technical analysis" in h:
             finding["reproduction_steps"] = body.strip()
-        elif "remediation" in heading_lower or "fix" in heading_lower:
+        elif "remediation" in h or "fix" in h:
             finding["fix_guidance"] = body.strip()
 
+    # Parse inline metadata
     for line in content.split("\n")[:20]:
-        stripped = line.strip()
-        if stripped.startswith("- **Endpoint") or stripped.startswith("**Endpoint"):
-            finding["endpoint"] = line.split(":", 1)[-1].strip().strip("*").strip()
-        elif stripped.startswith("- **Target") or stripped.startswith("**Target"):
-            if not finding["endpoint"]:
-                finding["endpoint"] = line.split(":", 1)[-1].strip().strip("*").strip()
-        elif stripped.startswith("- **Method") or stripped.startswith("**Method"):
-            method = line.split(":", 1)[-1].strip().strip("*").strip()
-            if finding["endpoint"]:
-                finding["endpoint"] = f"{method} {finding['endpoint']}"
-        elif stripped.startswith("- **Severity") or stripped.startswith("**Severity"):
-            finding["severity"] = normalize_severity(
-                line.split(":", 1)[-1].strip().strip("*")
-            )
+        s = line.strip()
+        if s.startswith("- **Endpoint") or s.startswith("**Endpoint"):
+            finding["endpoint"] = line.split(":", 1)[-1].strip().strip("*")
+        elif s.startswith("- **Severity") or s.startswith("**Severity"):
+            finding["severity"] = normalize_severity(line.split(":", 1)[-1].strip().strip("*"))
 
     if not finding["title"]:
         finding["title"] = md_file.stem.replace("-", " ").title()
@@ -590,7 +688,7 @@ def parse_vulnerability_md(md_file: Path) -> dict | None:
     return finding
 
 
-def split_markdown_sections(content: str) -> dict:
+def _split_markdown_sections(content: str) -> dict:
     """Split markdown content into sections by heading."""
     sections = {}
     current_heading = ""
@@ -612,12 +710,12 @@ def split_markdown_sections(content: str) -> dict:
 
 
 def _is_real_finding(finding: dict) -> bool:
-    """Filter out non-findings that Strix filed despite finding nothing."""
+    """Filter out non-findings."""
     sev = finding.get("severity", "").lower()
     if sev == "none" or sev == "":
         return False
 
-    # Check if the content explicitly says nothing was found
+    # Check if content indicates nothing found
     for field in ("impact", "reproduction_steps", "poc"):
         val = finding.get(field, "").lower()
         if any(phrase in val for phrase in (
@@ -628,17 +726,14 @@ def _is_real_finding(finding: dict) -> bool:
             "no vulnerabilit",
         )):
             continue
-        else:
-            # At least one field has real content
-            if val.strip():
-                return True
+        if val.strip():
+            return True
 
-    # All fields are either empty or say "nothing found"
     return False
 
 
 def normalize_severity(severity: str) -> str:
-    """Normalize severity string to standard format."""
+    """Normalize severity string."""
     s = severity.lower().strip()
     if s == "none" or s == "":
         return "None"

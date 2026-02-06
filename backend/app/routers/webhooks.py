@@ -1,3 +1,4 @@
+import uuid
 import stripe
 from fastapi import APIRouter, Request, HTTPException
 from app.config import settings
@@ -7,6 +8,8 @@ from app.email_service import send_payment_received_email, send_deep_scan_starte
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 stripe.api_key = settings.stripe_secret_key
+
+TIER_RANK = {"unlock": 1, "pro": 2, "deep": 3}
 
 
 @router.post("/stripe")
@@ -47,29 +50,39 @@ async def handle_successful_payment(session: dict):
         print(f"Scan not found: {scan_id}")
         return
 
-    # Update scan with payment info
-    await database.execute(
-        scans.update()
-        .where(scans.c.id == scan_id)
-        .values(
-            paid_tier=tier,
-            stripe_payment_id=session["id"],
-        )
-    )
+    # Idempotency: skip if already processed with this payment
+    if scan["stripe_payment_id"]:
+        return
 
-    # Send confirmation email
-    await send_payment_received_email(scan["email"], scan_id, tier)
-
-    # If deep tier, trigger deep scan
-    if tier == "deep":
+    # Update scan with payment info (upgrade-aware)
+    current_rank = TIER_RANK.get(scan["paid_tier"], 0)
+    new_rank = TIER_RANK.get(tier, 0)
+    if new_rank > current_rank:
         await database.execute(
             scans.update()
             .where(scans.c.id == scan_id)
             .values(
-                scan_type="deep",
+                paid_tier=tier,
+                stripe_payment_id=session["id"],
+            )
+        )
+
+    # Send confirmation email
+    await send_payment_received_email(scan["email"], scan_id, tier)
+
+    # If pro or deep, create child scan
+    if tier in ("pro", "deep"):
+        child_scan_id = str(uuid.uuid4())
+        await database.execute(
+            scans.insert().values(
+                id=child_scan_id,
+                email=scan["email"],
+                target_url=scan["target_url"],
                 status="pending",
+                scan_type=tier,
+                parent_scan_id=scan_id,
             )
         )
         await send_deep_scan_started_email(
-            scan["email"], scan_id, scan["target_url"]
+            scan["email"], child_scan_id, scan["target_url"]
         )
