@@ -560,12 +560,13 @@ async def admin_dashboard(key: str = ""):
             "completed_at": str(s["completed_at"]) if s["completed_at"] else None,
         }
 
-        # Include cost from progress for running scans
-        if status == "running" and s["progress_json"]:
+        # Include cost/stats from progress for running and completed scans
+        if status in ("running", "completed", "failed") and s["progress_json"]:
             progress = json.loads(s["progress_json"])
             scan_info["cost"] = progress.get("cost", 0)
             scan_info["tools"] = progress.get("tools", 0)
-            scan_info["active_agents"] = progress.get("active_agents", 0)
+            if status == "running":
+                scan_info["active_agents"] = progress.get("active_agents", 0)
 
         scan_list.append(scan_info)
 
