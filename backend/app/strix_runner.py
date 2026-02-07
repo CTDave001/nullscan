@@ -299,9 +299,9 @@ def _determine_scan_phase(tracer, vulnerabilities: list) -> str:
     return "init"
 
 
-# Track max tokens/cost to ensure counters never decrease
+# Track per-agent costs so we don't lose data when agents finish and get removed
+_agent_cost_tracker = {}  # scan_id -> {"per_agent": {agent_id: cost}, "banked": float}
 _max_tokens_seen = {}
-_max_cost_seen = {}
 
 
 async def _update_progress(
@@ -316,15 +316,31 @@ async def _update_progress(
     while True:
         await asyncio.sleep(5)
         try:
+            # Get per-agent costs directly from agent instances
+            from strix.tools.agents_graph.agents_graph_actions import _agent_instances
+
+            if scan_id not in _agent_cost_tracker:
+                _agent_cost_tracker[scan_id] = {"per_agent": {}, "banked": 0.0}
+            tracker = _agent_cost_tracker[scan_id]
+
+            # Update costs for all currently live agents
+            live_agent_ids = set()
+            for aid, agent_inst in _agent_instances.items():
+                live_agent_ids.add(aid)
+                if hasattr(agent_inst, "llm") and hasattr(agent_inst.llm, "_total_stats"):
+                    tracker["per_agent"][aid] = agent_inst.llm._total_stats.cost
+
+            # Bank costs from agents that have been removed
+            for aid in list(tracker["per_agent"].keys()):
+                if aid not in live_agent_ids:
+                    tracker["banked"] += tracker["per_agent"].pop(aid)
+
+            # True accumulated cost = banked (finished agents) + current (live agents)
+            current_cost = tracker["banked"] + sum(tracker["per_agent"].values())
+            current_cost = round(current_cost, 4)
+
             stats = tracer.get_total_llm_stats()
             total = stats.get("total", {})
-
-            # Track max cost (never decrease)
-            raw_cost = total.get("cost", 0.0)
-            if scan_id not in _max_cost_seen:
-                _max_cost_seen[scan_id] = 0.0
-            _max_cost_seen[scan_id] = max(_max_cost_seen[scan_id], raw_cost)
-            current_cost = _max_cost_seen[scan_id]
 
             # Check cost limit — tell the agent to wrap up
             if cost_limit > 0 and current_cost >= cost_limit and agent and not _cost_warning_sent:
@@ -544,8 +560,14 @@ async def run_strix_scan_async(
             if scan_id:
                 try:
                     from app.database import database, scans as scans_table
-                    err_stats = tracer.get_total_llm_stats().get("total", {})
-                    err_cost = max(err_stats.get("cost", 0.0), _max_cost_seen.get(scan_id, 0.0))
+                    from strix.tools.agents_graph.agents_graph_actions import _agent_instances as _err_agents
+                    tracker = _agent_cost_tracker.get(scan_id, {"per_agent": {}, "banked": 0.0})
+                    for aid, ai in _err_agents.items():
+                        if hasattr(ai, "llm") and hasattr(ai.llm, "_total_stats"):
+                            tracker["per_agent"][aid] = ai.llm._total_stats.cost
+                    for aid in list(tracker["per_agent"].keys()):
+                        tracker["banked"] += tracker["per_agent"].pop(aid)
+                    err_cost = round(tracker["banked"], 4)
                     existing = await database.fetch_one(scans_table.select().where(scans_table.c.id == scan_id))
                     progress = json.loads(existing["progress_json"]) if existing and existing["progress_json"] else {}
                     progress["cost"] = err_cost
@@ -588,12 +610,20 @@ async def run_strix_scan_async(
         if scan_id:
             try:
                 from app.database import database, scans
+                from strix.tools.agents_graph.agents_graph_actions import _agent_instances as _final_agents
+
+                # Calculate final cost from tracker + any remaining live agents
+                tracker = _agent_cost_tracker.get(scan_id, {"per_agent": {}, "banked": 0.0})
+                for aid, agent_inst in _final_agents.items():
+                    if hasattr(agent_inst, "llm") and hasattr(agent_inst.llm, "_total_stats"):
+                        tracker["per_agent"][aid] = agent_inst.llm._total_stats.cost
+                # Bank all remaining
+                for aid in list(tracker["per_agent"].keys()):
+                    tracker["banked"] += tracker["per_agent"].pop(aid)
+                final_cost = round(tracker["banked"], 4)
+
                 final_stats = tracer.get_total_llm_stats()
                 final_total = final_stats.get("total", {})
-                final_cost = max(
-                    final_total.get("cost", 0.0),
-                    _max_cost_seen.get(scan_id, 0.0),
-                )
                 final_tokens = max(
                     final_total.get("input_tokens", 0),
                     _max_tokens_seen.get(scan_id, 0),
