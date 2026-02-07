@@ -451,15 +451,17 @@ async def run_strix_scan_async(
     Run Strix scan using Python API (follows original CLI pattern).
     Returns parsed results or error dict.
     """
-    # Configure scan mode, iterations, and cost limit per tier (from env vars)
+    # Configure scan mode, iterations, cost limit, agent cap, and wait timeout per tier
     tier_config = {
-        "quick": (settings.tier_quick_llm, settings.tier_quick_iterations, settings.tier_quick_mode, settings.tier_quick_cost_limit),
-        "pro":   (settings.tier_pro_llm,   settings.tier_pro_iterations,   settings.tier_pro_mode,   settings.tier_pro_cost_limit),
-        "deep":  (settings.tier_deep_llm,  settings.tier_deep_iterations,  settings.tier_deep_mode,  settings.tier_deep_cost_limit),
+        "quick": (settings.tier_quick_llm, settings.tier_quick_iterations, settings.tier_quick_mode, settings.tier_quick_cost_limit, settings.tier_quick_max_agents, settings.tier_quick_wait_timeout),
+        "pro":   (settings.tier_pro_llm,   settings.tier_pro_iterations,   settings.tier_pro_mode,   settings.tier_pro_cost_limit,   settings.tier_pro_max_agents,   settings.tier_pro_wait_timeout),
+        "deep":  (settings.tier_deep_llm,  settings.tier_deep_iterations,  settings.tier_deep_mode,  settings.tier_deep_cost_limit,  settings.tier_deep_max_agents,  settings.tier_deep_wait_timeout),
     }
-    llm, max_iterations, scan_mode, cost_limit = tier_config.get(scan_type, tier_config["quick"])
+    llm, max_iterations, scan_mode, cost_limit, max_agents, wait_timeout = tier_config.get(scan_type, tier_config["quick"])
     os.environ["STRIX_LLM"] = llm
     os.environ["LLM_API_KEY"] = settings.llm_api_key
+    os.environ["STRIX_MAX_AGENTS"] = str(max_agents)
+    os.environ["STRIX_AGENT_WAIT_TIMEOUT"] = str(wait_timeout)
 
     progress_task = None
 
@@ -472,7 +474,7 @@ async def run_strix_scan_async(
         from strix.telemetry.tracer import Tracer, set_global_tracer
 
         apply_saved_config()
-        print(f"[strix] Starting {scan_mode} scan for {target_url} (max {max_iterations} iterations)")
+        print(f"[strix] Starting {scan_mode} scan for {target_url} (max {max_iterations} iters, {max_agents} agents, {wait_timeout}s timeout)")
 
         # Build target info (same as Strix CLI)
         target_type, target_details = infer_target_type(target_url)

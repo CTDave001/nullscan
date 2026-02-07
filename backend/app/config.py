@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     tier_quick_cost_limit: float = 4.0
     tier_pro_cost_limit: float = 150.0
     tier_deep_cost_limit: float = 600.0
+
+    # Per-tier agent cap and wait timeout
+    tier_quick_max_agents: int = 15
+    tier_quick_wait_timeout: int = 120
+    tier_pro_max_agents: int = 25
+    tier_pro_wait_timeout: int = 300
+    tier_deep_max_agents: int = 40
+    tier_deep_wait_timeout: int = 600
     cors_origins: str = "https://nullscan.io,https://www.nullscan.io"
     unlimited_emails: str = ""
 
