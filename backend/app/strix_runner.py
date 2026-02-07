@@ -540,6 +540,19 @@ async def run_strix_scan_async(
             details = result.get("details", "")
             if progress_task:
                 progress_task.cancel()
+            # Write final cost before cleanup
+            if scan_id:
+                try:
+                    from app.database import database, scans as scans_table
+                    err_stats = tracer.get_total_llm_stats().get("total", {})
+                    err_cost = max(err_stats.get("cost", 0.0), _max_cost_seen.get(scan_id, 0.0))
+                    existing = await database.fetch_one(scans_table.select().where(scans_table.c.id == scan_id))
+                    progress = json.loads(existing["progress_json"]) if existing and existing["progress_json"] else {}
+                    progress["cost"] = err_cost
+                    progress["active_agents"] = 0
+                    await database.execute(scans_table.update().where(scans_table.c.id == scan_id).values(progress_json=json.dumps(progress)))
+                except Exception:
+                    pass
             tracer.cleanup()
             cleanup_runtime()
             return {
@@ -569,8 +582,42 @@ async def run_strix_scan_async(
         # Filter non-findings
         findings = [f for f in findings if _is_real_finding(f)]
 
+        # Write final progress with accumulated cost before cancelling
         if progress_task:
             progress_task.cancel()
+        if scan_id:
+            try:
+                from app.database import database, scans
+                final_stats = tracer.get_total_llm_stats()
+                final_total = final_stats.get("total", {})
+                final_cost = max(
+                    final_total.get("cost", 0.0),
+                    _max_cost_seen.get(scan_id, 0.0),
+                )
+                final_tokens = max(
+                    final_total.get("input_tokens", 0),
+                    _max_tokens_seen.get(scan_id, 0),
+                )
+                # Read existing progress and update with final stats
+                existing = await database.fetch_one(
+                    scans.select().where(scans.c.id == scan_id)
+                )
+                progress = {}
+                if existing and existing["progress_json"]:
+                    progress = json.loads(existing["progress_json"])
+                progress["cost"] = final_cost
+                progress["input_tokens"] = final_tokens
+                progress["output_tokens"] = final_total.get("output_tokens", 0)
+                progress["active_agents"] = 0
+                progress["active_agent_list"] = []
+                await database.execute(
+                    scans.update()
+                    .where(scans.c.id == scan_id)
+                    .values(progress_json=json.dumps(progress))
+                )
+                print(f"[strix] Final cost: ${final_cost:.4f}")
+            except Exception as e:
+                print(f"[strix] Warning: Failed to write final progress: {e}")
 
         # Process markdown report for structured output
         structured_report = None
