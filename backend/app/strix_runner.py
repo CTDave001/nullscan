@@ -299,8 +299,9 @@ def _determine_scan_phase(tracer, vulnerabilities: list) -> str:
     return "init"
 
 
-# Track max tokens to ensure counter never decreases
+# Track max tokens/cost to ensure counters never decrease
 _max_tokens_seen = {}
+_max_cost_seen = {}
 
 
 async def _update_progress(
@@ -318,8 +319,14 @@ async def _update_progress(
             stats = tracer.get_total_llm_stats()
             total = stats.get("total", {})
 
+            # Track max cost (never decrease)
+            raw_cost = total.get("cost", 0.0)
+            if scan_id not in _max_cost_seen:
+                _max_cost_seen[scan_id] = 0.0
+            _max_cost_seen[scan_id] = max(_max_cost_seen[scan_id], raw_cost)
+            current_cost = _max_cost_seen[scan_id]
+
             # Check cost limit — tell the agent to wrap up
-            current_cost = total.get("cost", 0.0)
             if cost_limit > 0 and current_cost >= cost_limit and agent and not _cost_warning_sent:
                 _cost_warning_sent = True
                 print(f"[cost] Cost ${current_cost:.2f} exceeded limit ${cost_limit:.2f}, telling agent to wrap up", flush=True)
@@ -421,7 +428,7 @@ async def _update_progress(
                 "tools": tracer.get_real_tool_count(),
                 "input_tokens": tokens_to_show,  # Use cumulative max
                 "output_tokens": total.get("output_tokens", 0),
-                "cost": total.get("cost", 0.0),
+                "cost": current_cost,
                 "vulnerabilities_found": len(vulnerabilities),
                 "findings_so_far": [
                     {"title": v.get("title", ""), "severity": v.get("severity", "")}
