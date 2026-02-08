@@ -181,6 +181,13 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
+                <a
+                  href="#terminal"
+                  className="block w-full py-2.5 rounded-[var(--radius-sm)] font-mono text-xs uppercase tracking-wider text-center transition-all"
+                  style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                >
+                  Start Free Scan
+                </a>
               </div>
 
               {/* Unlock Tier */}
@@ -230,6 +237,13 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
+                <a
+                  href="#terminal"
+                  className="block w-full py-2.5 rounded-[var(--radius-sm)] font-mono text-xs uppercase tracking-wider text-center transition-all"
+                  style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                >
+                  Start Scan — Unlock Later
+                </a>
               </div>
 
               {/* Pro Tier - Highlighted */}
@@ -285,6 +299,13 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
+                <a
+                  href="#terminal"
+                  className="block w-full py-2.5 rounded-[var(--radius-sm)] font-mono text-xs uppercase tracking-wider text-center transition-all"
+                  style={{ backgroundColor: "var(--cyan)", color: "var(--void)" }}
+                >
+                  Start Pro Scan
+                </a>
               </div>
 
               {/* Deep Analysis Tier */}
@@ -333,6 +354,13 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
+                <a
+                  href="#terminal"
+                  className="block w-full py-2.5 rounded-[var(--radius-sm)] font-mono text-xs uppercase tracking-wider text-center transition-all"
+                  style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                >
+                  Start Deep Scan
+                </a>
               </div>
             </div>
 
