@@ -68,7 +68,7 @@ async def send_scan_failed_email(email: str, scan_id: str):
                     If you purchased a paid scan, please contact our support team and we'll make it right.
                 </p>
                 <div style="margin: 24px 0;">
-                    <a href="mailto:support@nullscan.io" style="display: inline-block; padding: 10px 24px; background-color: #06b6d4; color: #09090b; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; margin-right: 12px;">Contact Support</a>
+                    <a href="mailto:contact@nullscan.io" style="display: inline-block; padding: 10px 24px; background-color: #06b6d4; color: #09090b; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; margin-right: 12px;">Contact Support</a>
                     <a href="{settings.frontend_url}" style="display: inline-block; padding: 10px 24px; border: 1px solid #27272a; color: #a1a1aa; text-decoration: none; border-radius: 6px; font-size: 14px;">Try Again</a>
                 </div>
                 <p style="color: #52525b; font-size: 12px; margin-bottom: 0;">Nullscan Security</p>
