@@ -661,9 +661,15 @@ async def admin_dashboard(key: str = "", format: str = "html"):
         cost_str = f"${s.get('cost', 0):.4f}" if "cost" in s else "-"
         agents_str = str(s.get("active_agents", "-")) if s["status"] in ("running", "cancelling") else "-"
         tier_str = s.get("paid_tier") or "free"
-        cancel_btn = ""
+        actions = ""
+        if s["status"] in ("running", "pending", "cancelling"):
+            view_url = f'{settings.frontend_url}/scan/{s["id"]}'
+            actions += f'<a href="{view_url}" target="_blank" style="padding:4px 12px;background:#06b6d4;color:#09090b;border:none;border-radius:4px;cursor:pointer;font-size:12px;text-decoration:none;margin-right:6px;">View</a>'
+        if s["status"] == "completed":
+            view_url = f'{settings.frontend_url}/results/{s["id"]}'
+            actions += f'<a href="{view_url}" target="_blank" style="padding:4px 12px;background:#22c55e;color:#09090b;border:none;border-radius:4px;cursor:pointer;font-size:12px;text-decoration:none;margin-right:6px;">Results</a>'
         if s["status"] in ("running", "pending"):
-            cancel_btn = f'<button onclick="cancelScan(\'{s["id"]}\')" style="padding:4px 12px;background:#ef4444;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Cancel</button>'
+            actions += f'<button onclick="cancelScan(\'{s["id"]}\')" style="padding:4px 12px;background:#ef4444;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Cancel</button>'
 
         rows += f"""<tr style="border-bottom:1px solid #27272a;">
             <td style="padding:8px;font-family:monospace;font-size:12px;color:#a1a1aa;">{s["id"][:12]}</td>
@@ -674,7 +680,7 @@ async def admin_dashboard(key: str = "", format: str = "html"):
             <td style="padding:8px;font-family:monospace;font-size:12px;color:#fafafa;">{cost_str}</td>
             <td style="padding:8px;font-size:12px;color:#a1a1aa;">{agents_str}</td>
             <td style="padding:8px;font-size:12px;color:#71717a;">{s.get("email", "")}</td>
-            <td style="padding:8px;">{cancel_btn}</td>
+            <td style="padding:8px;white-space:nowrap;">{actions}</td>
         </tr>"""
 
     html = f"""<!DOCTYPE html>
