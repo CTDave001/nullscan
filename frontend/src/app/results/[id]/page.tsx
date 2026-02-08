@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { StatusBar } from "@/components/status-bar"
 import { GridOverlay, CornerMarkers } from "@/components/grid-overlay"
 import { NullscanLogo } from "@/components/nullscan-logo"
@@ -149,6 +149,7 @@ const formatNumber = (n: number) => {
 
 export default function ResultsPage() {
   const params = useParams()
+  const router = useRouter()
   const scanId = params.id as string
 
   const [results, setResults] = useState<ScanResults | null>(null)
@@ -237,11 +238,16 @@ export default function ResultsPage() {
     setShowCheckoutModal(true)
   }
 
-  const handleCheckoutSuccess = () => {
+  const handleCheckoutSuccess = (childScanId?: string) => {
     setShowCheckoutModal(false)
     setCheckoutTier(undefined)
-    // Refresh the page to show unlocked content
-    window.location.reload()
+    if (childScanId) {
+      // Pro/Deep scan — redirect to the scanning page
+      router.push(`/scan/${childScanId}`)
+    } else {
+      // Unlock — refresh to show unlocked content
+      window.location.reload()
+    }
   }
 
   const handleSendPdf = async () => {

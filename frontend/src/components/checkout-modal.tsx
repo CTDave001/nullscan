@@ -19,7 +19,7 @@ interface CheckoutModalProps {
   onClose: () => void
   scanId: string
   targetUrl: string
-  onSuccess: () => void
+  onSuccess: (childScanId?: string) => void
   preselectedTier?: "pro" | "deep"
 }
 
@@ -80,7 +80,7 @@ function CheckoutForm({
 }: {
   scanId: string
   tier: TierOption
-  onSuccess: () => void
+  onSuccess: (childScanId?: string) => void
   onBack: () => void
 }) {
   const stripe = useStripe()
@@ -120,8 +120,9 @@ function CheckoutForm({
         )
         if (!res.ok) throw new Error("Failed to confirm payment")
 
+        const data = await res.json()
         setSucceeded(true)
-        setTimeout(onSuccess, 1500)
+        setTimeout(() => onSuccess(data.child_scan_id), 1500)
       } catch (err) {
         setError("Payment succeeded but failed to unlock. Please contact support.")
       }
@@ -143,7 +144,9 @@ function CheckoutForm({
           Payment Successful!
         </h3>
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          Your report is being unlocked...
+          {tier.id === "pro" || tier.id === "deep"
+            ? "Starting your scan..."
+            : "Your report is being unlocked..."}
         </p>
       </div>
     )
@@ -300,16 +303,16 @@ export function CheckoutModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-lg rounded-[var(--radius)] overflow-hidden animate-fade-in-up"
+        className="relative w-full max-w-lg rounded-[var(--radius)] my-auto animate-fade-in-up max-h-[90vh] overflow-y-auto"
         style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}
       >
         {/* Header */}
