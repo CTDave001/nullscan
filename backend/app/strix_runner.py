@@ -600,10 +600,12 @@ async def run_strix_scan_async(
 
         # Parse results from output directory
         findings = parse_strix_run_dir(run_name)
+        print(f"[strix] File-based findings: {len(findings)}", flush=True)
+        print(f"[strix] Callback vulnerabilities: {len(vulnerabilities)}", flush=True)
 
-        # Include callback vulnerabilities if no file-based findings
-        if not findings and vulnerabilities:
-            findings = [
+        # Always include callback vulnerabilities (merge with file-based findings)
+        if vulnerabilities:
+            callback_findings = [
                 {
                     "title": v.get("title", "Unknown"),
                     "severity": normalize_severity(v.get("severity", "medium")),
@@ -615,9 +617,18 @@ async def run_strix_scan_async(
                 }
                 for v in vulnerabilities
             ]
+            # Merge: add callback findings that aren't already in file-based findings (by title)
+            existing_titles = {f.get("title", "").lower() for f in findings}
+            for cf in callback_findings:
+                if cf["title"].lower() not in existing_titles:
+                    findings.append(cf)
 
-        # Filter non-findings
+        # Filter non-findings (but keep anything with a valid title and severity)
+        pre_filter_count = len(findings)
         findings = [f for f in findings if _is_real_finding(f)]
+        print(f"[strix] After merge: {pre_filter_count}, after filter: {len(findings)}", flush=True)
+        if pre_filter_count > 0 and len(findings) == 0:
+            print(f"[strix] WARNING: All findings filtered out! Titles were: {[f.get('title', '') for f in parse_strix_run_dir(run_name)]}", flush=True)
 
         # Write final progress with accumulated cost before cancelling
         if progress_task:
@@ -663,6 +674,23 @@ async def run_strix_scan_async(
                 print(f"[strix] Final cost: ${final_cost:.4f}")
             except Exception as e:
                 print(f"[strix] Warning: Failed to write final progress: {e}")
+
+        # If still no findings but we had vulnerabilities in progress, log warning
+        if not findings and vulnerabilities:
+            print(f"[strix] WARNING: {len(vulnerabilities)} callback vulns were all filtered! Raw titles: {[v.get('title','') for v in vulnerabilities]}", flush=True)
+            # Force-include callback vulnerabilities even if they look like non-findings
+            findings = [
+                {
+                    "title": v.get("title", "Unknown"),
+                    "severity": normalize_severity(v.get("severity", "medium")),
+                    "endpoint": v.get("endpoint", ""),
+                    "impact": v.get("impact", v.get("description", "")),
+                    "reproduction_steps": v.get("technical_analysis", ""),
+                    "poc": v.get("poc_script_code", v.get("poc_description", "")),
+                    "fix_guidance": v.get("remediation_steps", ""),
+                }
+                for v in vulnerabilities
+            ]
 
         # Process markdown report for structured output
         structured_report = None
@@ -833,23 +861,29 @@ def _split_markdown_sections(content: str) -> dict:
 
 
 def _is_real_finding(finding: dict) -> bool:
-    """Filter out non-findings."""
+    """Filter out non-findings. Keep anything with a real title and severity."""
+    title = finding.get("title", "").strip().lower()
     sev = finding.get("severity", "").lower()
+
     if sev == "none" or sev == "":
         return False
 
-    # Check if content indicates nothing found
+    # Filter out generic non-finding titles
+    non_finding_titles = (
+        "no vulnerabilities", "no issues", "scan complete",
+        "scan summary", "no findings", "clean",
+    )
+    if any(nf in title for nf in non_finding_titles):
+        return False
+
+    # If it has a meaningful title, keep it
+    if title and len(title) > 3:
+        return True
+
+    # Check if any content field has real data
     for field in ("impact", "reproduction_steps", "poc"):
-        val = finding.get(field, "").lower()
-        if any(phrase in val for phrase in (
-            "no exploitable vulnerabilit",
-            "no critical impact",
-            "no poc is required",
-            "n/a",
-            "no vulnerabilit",
-        )):
-            continue
-        if val.strip():
+        val = finding.get(field, "").strip()
+        if val and val.lower() not in ("n/a", "none", "no"):
             return True
 
     return False
