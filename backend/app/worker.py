@@ -89,6 +89,7 @@ async def process_scan(scan: dict):
                     completed_at=datetime.now(),
                 )
             )
+            await send_scan_failed_email(scan["email"], scan_id)
             return
         finally:
             _running_scan_tasks.pop(scan_id, None)

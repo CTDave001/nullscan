@@ -57,16 +57,22 @@ async def send_scan_failed_email(email: str, scan_id: str):
         resend.Emails.send({
             "from": settings.email_from,
             "to": email,
-            "subject": "Security scan failed",
+            "subject": "Security scan could not be completed",
             "html": f"""
-            <h2>Something went wrong</h2>
-            <p>We couldn't complete your security scan. This sometimes happens with
-               complex applications.</p>
-            <p>
-                <a href="{settings.frontend_url}">
-                    Try again
-                </a>
-            </p>
+            <div style="font-family: -apple-system, sans-serif; max-width: 560px; margin: 0 auto; color: #fafafa; background-color: #09090b; padding: 32px; border-radius: 8px;">
+                <h2 style="color: #fafafa; margin-top: 0;">Something went wrong</h2>
+                <p style="color: #a1a1aa; line-height: 1.6;">
+                    We were unable to complete your security scan (ID: {scan_id[:8]}). This can happen with complex applications or unusual configurations.
+                </p>
+                <p style="color: #a1a1aa; line-height: 1.6;">
+                    If you purchased a paid scan, please contact our support team and we'll make it right.
+                </p>
+                <div style="margin: 24px 0;">
+                    <a href="mailto:support@nullscan.io" style="display: inline-block; padding: 10px 24px; background-color: #06b6d4; color: #09090b; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; margin-right: 12px;">Contact Support</a>
+                    <a href="{settings.frontend_url}" style="display: inline-block; padding: 10px 24px; border: 1px solid #27272a; color: #a1a1aa; text-decoration: none; border-radius: 6px; font-size: 14px;">Try Again</a>
+                </div>
+                <p style="color: #52525b; font-size: 12px; margin-bottom: 0;">Nullscan Security</p>
+            </div>
             """,
         })
     except Exception as e:
