@@ -3,7 +3,7 @@ import json
 import subprocess
 from datetime import datetime
 from app.database import database, scans
-from app.strix_runner import run_strix_scan_async
+from app.strix_runner import run_strix_scan_async, _running_scan_tasks
 from app.email_service import send_scan_complete_email, send_scan_failed_email
 
 
@@ -66,12 +66,32 @@ async def process_scan(scan: dict):
     )
 
     try:
-        # Run Strix
-        results = await run_strix_scan_async(
-            target_url=scan["target_url"],
-            scan_type=scan["scan_type"],
-            scan_id=scan_id,
+        # Run Strix (wrap in task so it can be cancelled)
+        scan_task = asyncio.create_task(
+            run_strix_scan_async(
+                target_url=scan["target_url"],
+                scan_type=scan["scan_type"],
+                scan_id=scan_id,
+            )
         )
+        _running_scan_tasks[scan_id] = scan_task
+
+        try:
+            results = await scan_task
+        except asyncio.CancelledError:
+            print(f"[worker] Scan {scan_id} was cancelled", flush=True)
+            await database.execute(
+                scans.update()
+                .where(scans.c.id == scan_id)
+                .values(
+                    status="failed",
+                    results_json=json.dumps({"error": "Scan cancelled by admin"}),
+                    completed_at=datetime.now(),
+                )
+            )
+            return
+        finally:
+            _running_scan_tasks.pop(scan_id, None)
 
         if "error" in results:
             # Check retry count

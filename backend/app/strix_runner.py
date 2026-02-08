@@ -12,6 +12,9 @@ from pathlib import Path
 from app.config import settings
 from app.report_processor import process_scan_report
 
+# Track running scan tasks so they can be cancelled
+_running_scan_tasks: dict[str, asyncio.Task] = {}
+
 
 def _categorize_action(tool_name: str, args: dict, cmd_lower: str = "") -> tuple[str, str]:
     """Categorize action and create user-friendly description."""
@@ -316,6 +319,18 @@ async def _update_progress(
     while True:
         await asyncio.sleep(5)
         try:
+            # Check if scan has been cancelled by admin
+            cancel_check = await database.fetch_one(
+                scans.select().where(scans.c.id == scan_id)
+            )
+            if cancel_check and cancel_check["status"] == "cancelling":
+                print(f"[cancel] Scan {scan_id} cancelled by admin", flush=True)
+                # Cancel the main scan task
+                scan_task = _running_scan_tasks.get(scan_id)
+                if scan_task:
+                    scan_task.cancel()
+                raise asyncio.CancelledError()
+
             # Get per-agent costs directly from agent instances
             from strix.tools.agents_graph.agents_graph_actions import _agent_instances
 

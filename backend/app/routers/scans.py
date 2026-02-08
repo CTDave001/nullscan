@@ -648,3 +648,28 @@ async def admin_dashboard(key: str = ""):
         "summary": summary,
         "scans": scan_list,
     }
+
+
+@router.post("/admin/cancel/{scan_id}")
+async def admin_cancel_scan(scan_id: str, key: str = ""):
+    """Admin endpoint to cancel a running scan."""
+    if not settings.admin_api_key or key != settings.admin_api_key:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    scan = await database.fetch_one(
+        scans.select().where(scans.c.id == scan_id)
+    )
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    if scan["status"] != "running":
+        raise HTTPException(status_code=400, detail=f"Scan is not running (status: {scan['status']})")
+
+    # Set to cancelling — the worker's progress loop will detect this and cancel the task
+    await database.execute(
+        scans.update()
+        .where(scans.c.id == scan_id)
+        .values(status="cancelling")
+    )
+
+    return {"success": True, "message": f"Scan {scan_id} is being cancelled"}
