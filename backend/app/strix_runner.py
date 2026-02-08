@@ -442,15 +442,11 @@ async def _update_progress(
                     "status": exec_data.get("status", "running"),
                 })
 
-            # Sort by timestamp and take last 15
+            # Sort by timestamp and number all entries
             all_activity.sort(key=lambda x: x["ts"])
-            total_activity = len(all_activity)
-            recent_activity = all_activity[-15:]
-
-            # Add line numbers (offset from total)
-            start_num = max(1, total_activity - len(recent_activity) + 1)
-            for i, entry in enumerate(recent_activity):
-                entry["line"] = start_num + i
+            for i, entry in enumerate(all_activity):
+                entry["line"] = i + 1
+            recent_activity = all_activity
 
             progress = {
                 "agents": len(tracer.agents),
@@ -465,7 +461,7 @@ async def _update_progress(
                     {"title": v.get("title", ""), "severity": v.get("severity", "")}
                     for v in vulnerabilities
                 ],
-                "recent_activity": recent_activity[-15:],
+                "recent_activity": recent_activity,
                 "current_phase": phase,
             }
 

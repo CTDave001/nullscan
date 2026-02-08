@@ -296,9 +296,9 @@ export default function ScanStatusPage() {
               <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--text-dim)" }}>
                 Active Agents ({progress.active_agents ?? 0}/{progress.agents ?? 0})
               </p>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
+              <div className="space-y-2 max-h-[40vh] overflow-y-auto">
                 {activeAgents.length > 0 ? (
-                  activeAgents.slice(0, 5).map((agent, i) => (
+                  activeAgents.map((agent, i) => (
                     <div
                       key={i}
                       className="p-2 rounded-[var(--radius-sm)]"
@@ -411,7 +411,7 @@ export default function ScanStatusPage() {
 
               {hasProgress && !isComplete && !isFailed && (
                 <div className="py-1 flex items-center gap-2" style={{ color: "var(--cyan)" }}>
-                  <span style={{ color: "var(--text-dim)" }}>{String(recentActivity.length + 1).padStart(3, "0")}</span>
+                  <span style={{ color: "var(--text-dim)" }}>{String((recentActivity.length > 0 ? (recentActivity[recentActivity.length - 1].line ?? recentActivity.length) : 0) + 1).padStart(3, "0")}</span>
                   <span className="animate-status-pulse">_</span>
                 </div>
               )}
