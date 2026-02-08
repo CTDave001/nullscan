@@ -128,3 +128,6 @@ class ScanResults(BaseModel):
     paid_tier: Optional[str] = None
     # New structured report field
     structured_report: Optional[StructuredReportResponse] = None
+    # Free scan expiration
+    expired: bool = False
+    expires_in_days: Optional[int] = None

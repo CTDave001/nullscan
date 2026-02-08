@@ -162,6 +162,13 @@ async def send_pdf_report_email(email: str, scan_id: str, target_url: str):
                     View Online Report
                 </a>
 
+                <a href="{settings.api_url}/scans/{scan_id}/download-pdf"
+                   style="display: inline-block; background: #27272a; color: #06b6d4; padding: 12px 24px;
+                          text-decoration: none; border-radius: 6px; font-weight: 600; margin-top: 12px; margin-left: 12px;
+                          border: 1px solid #06b6d4;">
+                    Download PDF Report
+                </a>
+
                 <div style="border-top: 1px solid #27272a; margin-top: 40px; padding-top: 20px;">
                     <p style="color: #52525b; font-size: 12px; margin: 0;">
                         Questions? Reply to this email or visit nullscan.io

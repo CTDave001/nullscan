@@ -20,6 +20,7 @@ interface CheckoutModalProps {
   scanId: string
   targetUrl: string
   onSuccess: () => void
+  preselectedTier?: "pro" | "deep"
 }
 
 interface TierOption {
@@ -240,6 +241,7 @@ export function CheckoutModal({
   scanId,
   targetUrl,
   onSuccess,
+  preselectedTier,
 }: CheckoutModalProps) {
   const [selectedTier, setSelectedTier] = useState<TierOption | null>(null)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
@@ -280,6 +282,15 @@ export function CheckoutModal({
       setLoading(false)
     }
   }
+
+  // Auto-select tier when preselectedTier is provided
+  useEffect(() => {
+    if (isOpen && preselectedTier && !selectedTier && !clientSecret) {
+      const tier = TIERS.find((t) => t.id === preselectedTier)
+      if (tier) handleSelectTier(tier)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, preselectedTier])
 
   const handleBack = () => {
     setSelectedTier(null)

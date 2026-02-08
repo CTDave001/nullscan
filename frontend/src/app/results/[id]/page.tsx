@@ -23,6 +23,7 @@ import {
   ExternalLink,
   X,
   Mail,
+  Zap,
 } from "lucide-react"
 
 // ============================================================================
@@ -107,6 +108,8 @@ interface ScanResults {
   scan_type: string
   paid_tier: string | null
   structured_report?: StructuredReport
+  expired?: boolean
+  expires_in_days?: number | null
 }
 
 // ============================================================================
@@ -155,6 +158,7 @@ export default function ResultsPage() {
   const [expandedArea, setExpandedArea] = useState<number | null>(0)
   const [showPdfModal, setShowPdfModal] = useState(false)
   const [showCheckoutModal, setShowCheckoutModal] = useState(false)
+  const [checkoutTier, setCheckoutTier] = useState<"pro" | "deep" | undefined>(undefined)
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [childStatus, setChildStatus] = useState<{
@@ -224,12 +228,18 @@ export default function ResultsPage() {
     if (results?.paid_tier) {
       setShowPdfModal(true)
     } else {
-      setShowCheckoutModal(true)
+      openCheckout()
     }
+  }
+
+  const openCheckout = (tier?: "pro" | "deep") => {
+    setCheckoutTier(tier)
+    setShowCheckoutModal(true)
   }
 
   const handleCheckoutSuccess = () => {
     setShowCheckoutModal(false)
+    setCheckoutTier(undefined)
     // Refresh the page to show unlocked content
     window.location.reload()
   }
@@ -283,6 +293,35 @@ export default function ResultsPage() {
     )
   }
 
+  // Handle expired free reports
+  if (results.expired) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--void)" }}>
+        <div className="text-center max-w-md px-6">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}>
+            <Lock className="w-8 h-8" style={{ color: "var(--text-muted)" }} />
+          </div>
+          <h2 className="font-mono text-lg uppercase tracking-wider mb-3" style={{ color: "var(--text)" }}>Report Expired</h2>
+          <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+            Free reports expire after 30 days. Your scan results for <strong style={{ color: "var(--text-secondary)" }}>{results.target_url}</strong> are no longer available.
+          </p>
+          <div className="space-y-3">
+            <a
+              href="/"
+              className="block w-full py-3 rounded-[var(--radius-sm)] font-mono text-xs uppercase tracking-wider text-center"
+              style={{ backgroundColor: "var(--cyan)", color: "var(--void)" }}
+            >
+              Run a New Scan
+            </a>
+            <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+              Paid reports never expire. Unlock any scan to keep it permanently.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const isPaid = results.paid_tier !== null
   const report = results.structured_report
   const stats = report?.scan_stats
@@ -321,6 +360,28 @@ export default function ResultsPage() {
             </button>
           </div>
         </div>
+
+        {/* Free Scan Expiration Warning */}
+        {!isPaid && results.expires_in_days != null && results.expires_in_days <= 30 && (
+          <div
+            className="px-6 py-2.5 flex items-center justify-between"
+            style={{ backgroundColor: "#422006", borderBottom: "1px solid #854d0e" }}
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-3.5 h-3.5" style={{ color: "#eab308" }} />
+              <span className="font-mono text-xs" style={{ color: "#fde68a" }}>
+                Free report expires in {results.expires_in_days} day{results.expires_in_days !== 1 ? "s" : ""}. Unlock to keep it permanently.
+              </span>
+            </div>
+            <button
+              onClick={() => openCheckout()}
+              className="px-3 py-1 rounded-[var(--radius-sm)] font-mono text-[10px] uppercase tracking-wider"
+              style={{ backgroundColor: "#eab308", color: "#09090b" }}
+            >
+              Unlock — $39
+            </button>
+          </div>
+        )}
 
         {/* Risk Banner */}
         <div
@@ -758,11 +819,87 @@ export default function ResultsPage() {
                     Get technical details, proof-of-concept exploits, and remediation guidance.
                   </p>
                   <button
-                    onClick={() => setShowCheckoutModal(true)}
+                    onClick={() => openCheckout()}
                     className="w-full py-2.5 rounded-[var(--radius-sm)] font-mono text-xs uppercase tracking-wider transition-all"
                     style={{ backgroundColor: "var(--cyan)", color: "var(--void)" }}
                   >
                     Unlock for $39
+                  </button>
+                </div>
+              )}
+
+              {/* Upgrade Upsell for paid unlock users */}
+              {isPaid && results.paid_tier === "unlock" && results.scan_type === "quick" && (
+                <div
+                  className="p-5 rounded-[var(--radius)]"
+                  style={{
+                    backgroundColor: "var(--surface)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <Zap className="w-4 h-4" style={{ color: "var(--medium)" }} />
+                    <span className="font-mono text-xs uppercase" style={{ color: "var(--text)" }}>
+                      Go Deeper
+                    </span>
+                  </div>
+                  <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
+                    Your quick scan covered the basics. Upgrade for comprehensive testing with more attack vectors and iterations.
+                  </p>
+
+                  {/* Pro option */}
+                  <button
+                    onClick={() => openCheckout("pro")}
+                    className="w-full p-3 rounded-[var(--radius)] text-left mb-2 transition-all hover:border-[var(--cyan)]"
+                    style={{ backgroundColor: "var(--bg)", border: "1px solid var(--cyan)" }}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-mono text-sm font-bold" style={{ color: "var(--cyan)" }}>
+                        Pro Scan
+                      </span>
+                      <span className="font-mono text-sm font-bold" style={{ color: "var(--text)" }}>
+                        $250
+                      </span>
+                    </div>
+                    <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+                      300 iterations, 25 concurrent agents
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {["More attack vectors", "Deeper analysis", "Detailed report"].map((f) => (
+                        <span key={f} className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--surface)", color: "var(--text-dim)" }}>
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+
+                  {/* Deep option */}
+                  <button
+                    onClick={() => openCheckout("deep")}
+                    className="w-full p-3 rounded-[var(--radius)] text-left transition-all hover:border-[var(--medium)]"
+                    style={{ backgroundColor: "var(--bg)", border: "1px solid var(--border)" }}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-sm font-bold" style={{ color: "var(--text)" }}>
+                          Deep Analysis
+                        </span>
+                        <Zap className="w-3 h-3" style={{ color: "var(--medium)" }} />
+                      </div>
+                      <span className="font-mono text-sm font-bold" style={{ color: "var(--text)" }}>
+                        $899
+                      </span>
+                    </div>
+                    <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+                      500 iterations, 40 agents, full coverage
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {["Full attack surface", "Executive report", "Priority support"].map((f) => (
+                        <span key={f} className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--surface)", color: "var(--text-dim)" }}>
+                          {f}
+                        </span>
+                      ))}
+                    </div>
                   </button>
                 </div>
               )}
@@ -824,7 +961,7 @@ export default function ResultsPage() {
                     </div>
                   )}
                   <button
-                    onClick={() => setShowCheckoutModal(true)}
+                    onClick={() => openCheckout("deep")}
                     className="flex items-center justify-center gap-2 w-full py-2.5 rounded-[var(--radius-sm)] font-mono text-xs uppercase tracking-wider transition-all"
                     style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
                   >
@@ -931,10 +1068,11 @@ export default function ResultsPage() {
       {results && (
         <CheckoutModal
           isOpen={showCheckoutModal}
-          onClose={() => setShowCheckoutModal(false)}
+          onClose={() => { setShowCheckoutModal(false); setCheckoutTier(undefined) }}
           scanId={scanId}
           targetUrl={results.target_url}
           onSuccess={handleCheckoutSuccess}
+          preselectedTier={checkoutTier}
         />
       )}
 

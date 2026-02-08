@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     frontend_url: str = "http://localhost:3000"
+    api_url: str = "http://localhost:8000"  # Public API URL for email links
     llm_api_key: str = ""
     strix_path: str = "strix"
     openai_api_key: str = ""  # For report processing with structured outputs

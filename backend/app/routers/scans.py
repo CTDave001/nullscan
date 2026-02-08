@@ -2,10 +2,11 @@ import ipaddress
 import json
 import socket
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 import stripe
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 from app.database import database, scans, rate_limits
 from app.models import (
     ScanCreate, ScanResponse, ScanResults, ScanResultFinding,
@@ -441,6 +442,32 @@ async def get_scan_results(scan_id: str):
             detail=f"Scan not completed. Status: {scan['status']}"
         )
 
+    # Check free scan expiration (30 days)
+    FREE_REPORT_TTL_DAYS = 30
+    expired = False
+    expires_in_days = None
+    if not scan["paid_tier"]:
+        created = scan["created_at"]
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - created
+        if age.days >= FREE_REPORT_TTL_DAYS:
+            expired = True
+        else:
+            expires_in_days = FREE_REPORT_TTL_DAYS - age.days
+
+    if expired:
+        return ScanResults(
+            scan_id=scan_id,
+            target_url=scan["target_url"],
+            risk_level="Expired",
+            findings=[],
+            scan_type=scan["scan_type"],
+            completed_at=scan["completed_at"],
+            paid_tier=None,
+            expired=True,
+        )
+
     # Check for completed child scans (pro/deep upgrades)
     child_query = scans.select().where(
         (scans.c.parent_scan_id == scan_id) & (scans.c.status == "completed")
@@ -471,6 +498,7 @@ async def get_scan_results(scan_id: str):
         structured_report=filter_structured_report_for_tier(
             structured_report, scan["paid_tier"]
         ),
+        expires_in_days=expires_in_days,
     )
 
 
@@ -529,6 +557,52 @@ async def send_pdf_report(scan_id: str):
     )
 
     return {"success": True, "message": "PDF report sent to your email"}
+
+
+@router.get("/{scan_id}/download-pdf")
+async def download_pdf_report(scan_id: str):
+    """Download PDF report (paid users only)."""
+    query = scans.select().where(scans.c.id == scan_id)
+    scan = await database.fetch_one(query)
+
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    if scan["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Scan not completed")
+
+    if not scan["paid_tier"]:
+        raise HTTPException(status_code=403, detail="PDF reports are only available for paid scans")
+
+    # Get results (check for child scan results like the results endpoint)
+    child_query = scans.select().where(
+        (scans.c.parent_scan_id == scan_id) & (scans.c.status == "completed")
+    ).order_by(scans.c.completed_at.desc())
+    child_scan = await database.fetch_one(child_query)
+
+    result_source = child_scan if child_scan else scan
+    results = json.loads(result_source["results_json"]) if result_source["results_json"] else {}
+
+    from app.pdf_generator import generate_pdf_report
+    scan_data = {
+        "id": scan_id,
+        "target_url": scan["target_url"],
+        "email": scan["email"],
+        "paid_tier": scan["paid_tier"],
+        "scan_type": result_source["scan_type"],
+        "created_at": str(scan["created_at"]),
+        "completed_at": str(result_source["completed_at"]),
+    }
+
+    pdf_bytes = generate_pdf_report(scan_data, results)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="nullscan-report-{scan_id[:8]}.pdf"'
+        },
+    )
 
 
 @router.get("/admin/dashboard")
