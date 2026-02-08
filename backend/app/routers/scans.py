@@ -606,7 +606,7 @@ async def download_pdf_report(scan_id: str):
 
 
 @router.get("/admin/dashboard")
-async def admin_dashboard(key: str = ""):
+async def admin_dashboard(key: str = "", format: str = "html"):
     """Admin endpoint to view all scans and their statuses."""
     if not settings.admin_api_key or key != settings.admin_api_key:
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -634,20 +634,114 @@ async def admin_dashboard(key: str = ""):
             "completed_at": str(s["completed_at"]) if s["completed_at"] else None,
         }
 
-        # Include cost/stats from progress for running and completed scans
-        if status in ("running", "completed", "failed") and s["progress_json"]:
+        if status in ("running", "completed", "failed", "cancelling") and s["progress_json"]:
             progress = json.loads(s["progress_json"])
             scan_info["cost"] = progress.get("cost", 0)
             scan_info["tools"] = progress.get("tools", 0)
-            if status == "running":
+            if status in ("running", "cancelling"):
                 scan_info["active_agents"] = progress.get("active_agents", 0)
 
         scan_list.append(scan_info)
 
-    return {
-        "summary": summary,
-        "scans": scan_list,
+    if format == "json":
+        return {"summary": summary, "scans": scan_list}
+
+    # Build HTML admin dashboard
+    status_colors = {
+        "pending": "#eab308",
+        "running": "#06b6d4",
+        "completed": "#22c55e",
+        "failed": "#ef4444",
+        "cancelling": "#f97316",
     }
+
+    rows = ""
+    for s in scan_list:
+        sc = status_colors.get(s["status"], "#71717a")
+        cost_str = f"${s.get('cost', 0):.4f}" if "cost" in s else "-"
+        agents_str = str(s.get("active_agents", "-")) if s["status"] in ("running", "cancelling") else "-"
+        tier_str = s.get("paid_tier") or "free"
+        cancel_btn = ""
+        if s["status"] in ("running", "pending"):
+            cancel_btn = f'<button onclick="cancelScan(\'{s["id"]}\')" style="padding:4px 12px;background:#ef4444;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Cancel</button>'
+
+        rows += f"""<tr style="border-bottom:1px solid #27272a;">
+            <td style="padding:8px;font-family:monospace;font-size:12px;color:#a1a1aa;">{s["id"][:12]}</td>
+            <td style="padding:8px;font-size:13px;color:#fafafa;">{s["target_url"]}</td>
+            <td style="padding:8px;"><span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:{sc}20;color:{sc};text-transform:uppercase;">{s["status"]}</span></td>
+            <td style="padding:8px;font-size:12px;color:#a1a1aa;text-transform:uppercase;">{s["scan_type"]}</td>
+            <td style="padding:8px;font-size:12px;color:#a1a1aa;">{tier_str}</td>
+            <td style="padding:8px;font-family:monospace;font-size:12px;color:#fafafa;">{cost_str}</td>
+            <td style="padding:8px;font-size:12px;color:#a1a1aa;">{agents_str}</td>
+            <td style="padding:8px;font-size:12px;color:#71717a;">{s.get("email", "")}</td>
+            <td style="padding:8px;">{cancel_btn}</td>
+        </tr>"""
+
+    html = f"""<!DOCTYPE html>
+<html><head><title>Nullscan Admin</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body {{ margin:0; padding:24px; background:#09090b; color:#fafafa; font-family:-apple-system,sans-serif; }}
+  h1 {{ font-size:20px; font-weight:600; margin:0 0 20px 0; color:#fafafa; }}
+  .stats {{ display:flex; gap:12px; margin-bottom:24px; flex-wrap:wrap; }}
+  .stat {{ padding:12px 20px; border-radius:8px; background:#18181b; border:1px solid #27272a; }}
+  .stat-val {{ font-size:24px; font-weight:700; font-family:monospace; }}
+  .stat-label {{ font-size:11px; color:#71717a; text-transform:uppercase; letter-spacing:0.05em; margin-top:2px; }}
+  table {{ width:100%; border-collapse:collapse; background:#18181b; border-radius:8px; overflow:hidden; border:1px solid #27272a; }}
+  th {{ padding:10px 8px; text-align:left; font-size:11px; color:#71717a; text-transform:uppercase; letter-spacing:0.05em; border-bottom:1px solid #27272a; background:#111113; }}
+  .toast {{ position:fixed; top:20px; right:20px; padding:12px 20px; border-radius:8px; font-size:13px; display:none; z-index:99; }}
+  .refresh-btn {{ padding:6px 16px; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:6px; cursor:pointer; font-size:12px; }}
+  .refresh-btn:hover {{ background:#3f3f46; color:#fafafa; }}
+</style></head><body>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+  <h1>Nullscan Admin</h1>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <label style="font-size:12px;color:#71717a;"><input type="checkbox" id="autoRefresh" checked style="margin-right:4px;">Auto-refresh</label>
+    <button class="refresh-btn" onclick="location.reload()">Refresh</button>
+  </div>
+</div>
+<div class="stats">
+  <div class="stat"><div class="stat-val" style="color:#eab308;">{summary.get("pending",0)}</div><div class="stat-label">Pending</div></div>
+  <div class="stat"><div class="stat-val" style="color:#06b6d4;">{summary.get("running",0)}</div><div class="stat-label">Running</div></div>
+  <div class="stat"><div class="stat-val" style="color:#22c55e;">{summary.get("completed",0)}</div><div class="stat-label">Completed</div></div>
+  <div class="stat"><div class="stat-val" style="color:#ef4444;">{summary.get("failed",0)}</div><div class="stat-label">Failed</div></div>
+</div>
+<div id="toast" class="toast"></div>
+<table>
+  <thead><tr>
+    <th>ID</th><th>Target</th><th>Status</th><th>Type</th><th>Tier</th><th>Cost</th><th>Agents</th><th>Email</th><th>Action</th>
+  </tr></thead>
+  <tbody>{rows}</tbody>
+</table>
+<script>
+const KEY = new URLSearchParams(window.location.search).get('key');
+function showToast(msg, ok) {{
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  t.style.background = ok ? '#052e16' : '#450a0a';
+  t.style.color = ok ? '#22c55e' : '#ef4444';
+  t.style.border = '1px solid ' + (ok ? '#166534' : '#991b1b');
+  setTimeout(() => t.style.display = 'none', 3000);
+}}
+async function cancelScan(id) {{
+  if (!confirm('Cancel scan ' + id.slice(0,12) + '?')) return;
+  try {{
+    const r = await fetch('/scans/admin/cancel/' + id + '?key=' + KEY, {{method:'POST'}});
+    const d = await r.json();
+    if (r.ok) {{ showToast('Scan cancelling...', true); setTimeout(() => location.reload(), 2000); }}
+    else showToast(d.detail || 'Failed', false);
+  }} catch(e) {{ showToast('Error: ' + e.message, false); }}
+}}
+// Auto-refresh every 10s
+setInterval(() => {{
+  if (document.getElementById('autoRefresh').checked) location.reload();
+}}, 10000);
+</script>
+</body></html>"""
+
+    from starlette.responses import HTMLResponse
+    return HTMLResponse(content=html)
 
 
 @router.post("/admin/cancel/{scan_id}")
