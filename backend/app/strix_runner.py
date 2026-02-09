@@ -319,18 +319,6 @@ async def _update_progress(
     while True:
         await asyncio.sleep(5)
         try:
-            # Check if scan has been cancelled by admin
-            cancel_check = await database.fetch_one(
-                scans.select().where(scans.c.id == scan_id)
-            )
-            if cancel_check and cancel_check["status"] == "cancelling":
-                print(f"[cancel] Scan {scan_id} cancelled by admin", flush=True)
-                # Cancel the main scan task
-                scan_task = _running_scan_tasks.get(scan_id)
-                if scan_task:
-                    scan_task.cancel()
-                raise asyncio.CancelledError()
-
             # Get per-agent costs directly from agent instances
             from strix.tools.agents_graph.agents_graph_actions import _agent_instances
 
@@ -442,11 +430,15 @@ async def _update_progress(
                     "status": exec_data.get("status", "running"),
                 })
 
-            # Sort by timestamp and number all entries
+            # Sort by timestamp and take last 100
             all_activity.sort(key=lambda x: x["ts"])
-            for i, entry in enumerate(all_activity):
-                entry["line"] = i + 1
-            recent_activity = all_activity
+            total_activity = len(all_activity)
+            recent_activity = all_activity[-100:]
+
+            # Add line numbers (offset from total)
+            start_num = max(1, total_activity - len(recent_activity) + 1)
+            for i, entry in enumerate(recent_activity):
+                entry["line"] = start_num + i
 
             progress = {
                 "agents": len(tracer.agents),
@@ -461,7 +453,7 @@ async def _update_progress(
                     {"title": v.get("title", ""), "severity": v.get("severity", "")}
                     for v in vulnerabilities
                 ],
-                "recent_activity": recent_activity,
+                "recent_activity": recent_activity[-100:],
                 "current_phase": phase,
             }
 
