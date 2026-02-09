@@ -560,6 +560,9 @@ async def run_strix_scan_async(
             )
 
         result = await agent.execute_scan(scan_config)
+        print(f"[strix] execute_scan returned: type={type(result).__name__}, keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}", flush=True)
+        if isinstance(result, dict):
+            print(f"[strix] result success={result.get('success', 'not set')}, error={result.get('error', 'none')}", flush=True)
 
         # Check for scan errors
         if isinstance(result, dict) and not result.get("success", True):
@@ -688,21 +691,75 @@ async def run_strix_scan_async(
                 for v in vulnerabilities
             ]
 
+        # Last resort: if still no findings, pull from progress data in DB
+        if not findings and scan_id:
+            try:
+                from app.database import database, scans as scans_tbl
+                existing_scan = await database.fetch_one(
+                    scans_tbl.select().where(scans_tbl.c.id == scan_id)
+                )
+                if existing_scan and existing_scan["progress_json"]:
+                    prog = json.loads(existing_scan["progress_json"])
+                    progress_findings = prog.get("findings_so_far", [])
+                    if progress_findings:
+                        print(f"[strix] FALLBACK: Recovering {len(progress_findings)} findings from progress data", flush=True)
+                        findings = [
+                            {
+                                "title": f.get("title", "Unknown"),
+                                "severity": normalize_severity(f.get("severity", "medium")),
+                                "endpoint": "",
+                                "impact": "",
+                                "reproduction_steps": "",
+                                "poc": "",
+                                "fix_guidance": "",
+                            }
+                            for f in progress_findings
+                            if f.get("title")
+                        ]
+            except Exception as e:
+                print(f"[strix] Warning: Failed to recover from progress: {e}", flush=True)
+
         # Process markdown report for structured output
         structured_report = None
         run_dir = Path(f"strix_runs/{run_name}")
         report_path = run_dir / "penetration_test_report.md"
+
+        # Log all files in run dir for debugging
+        if run_dir.exists():
+            all_files = list(run_dir.rglob("*"))
+            print(f"[strix] Run dir files ({len(all_files)}):", flush=True)
+            for f in all_files[:30]:
+                print(f"  {f.relative_to(run_dir)} ({f.stat().st_size}b)", flush=True)
+        else:
+            print(f"[strix] WARNING: Run dir does not exist: {run_dir}", flush=True)
+
         if report_path.exists():
             try:
                 markdown_content = report_path.read_text(encoding="utf-8")
-                print(f"[strix] Processing report ({len(markdown_content)} chars)...")
+                print(f"[strix] Processing report ({len(markdown_content)} chars)...", flush=True)
                 structured_report = process_scan_report(markdown_content, target_url)
-                print(f"[strix] Structured report extracted")
+                print(f"[strix] Structured report extracted, risk: {structured_report.get('risk_level', '?')}", flush=True)
             except Exception as e:
-                print(f"[strix] Warning: Report processing failed: {e}")
+                print(f"[strix] Warning: Report processing failed: {e}", flush=True)
+        else:
+            print(f"[strix] WARNING: No penetration_test_report.md found", flush=True)
+            # Try to find ANY markdown report in the run dir
+            if run_dir.exists():
+                md_files = list(run_dir.glob("*.md"))
+                if md_files:
+                    print(f"[strix] Found alternative md files: {[f.name for f in md_files]}", flush=True)
+                    try:
+                        alt_content = md_files[0].read_text(encoding="utf-8")
+                        if len(alt_content) > 200:
+                            print(f"[strix] Using {md_files[0].name} as report ({len(alt_content)} chars)", flush=True)
+                            structured_report = process_scan_report(alt_content, target_url)
+                    except Exception as e:
+                        print(f"[strix] Warning: Alt report processing failed: {e}", flush=True)
 
         tracer.cleanup()
         cleanup_runtime()
+
+        print(f"[strix] === FINAL: {len(findings)} findings, structured_report={'yes' if structured_report else 'no'} ===", flush=True)
 
         result = {"findings": findings}
         if structured_report:
