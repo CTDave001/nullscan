@@ -99,8 +99,9 @@ def _build_header_section(scan_data: dict, results: dict) -> str:
         else "Indeterminate"
     )
     risk_color = _risk_color(risk_level)
-    paid_tier = _get(scan_data, "paid_tier", "free")
-    scan_type_label = (paid_tier or "free").replace("_", " ").title()
+    scan_type = _get(scan_data, "scan_type", "quick")
+    scan_type_labels = {"quick": "Quick", "pro": "Pro", "deep": "Deep"}
+    scan_type_label = scan_type_labels.get(scan_type, (scan_type or "Quick").title())
 
     return f"""
     <div class="header">
@@ -155,13 +156,36 @@ def _build_executive_summary(structured: Optional[dict]) -> str:
     """
 
 
-def _build_scan_stats(structured: Optional[dict]) -> str:
+def _build_scan_stats(structured: Optional[dict], scan_data: Optional[dict] = None) -> str:
     """Build the scan statistics section."""
     if not structured:
         return ""
     stats = _get(structured, "scan_stats")
     if not stats:
         return ""
+
+    # Calculate duration from scan timestamps if the report doesn't have it
+    duration = _get(stats, "duration_minutes", 0)
+    if not duration and scan_data:
+        try:
+            created = _get(scan_data, "created_at")
+            completed = _get(scan_data, "completed_at")
+            if created and completed:
+                if isinstance(created, str):
+                    created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                if isinstance(completed, str):
+                    completed = datetime.fromisoformat(completed.replace("Z", "+00:00"))
+                if isinstance(created, datetime) and isinstance(completed, datetime):
+                    delta = (completed - created).total_seconds()
+                    duration = max(1, round(delta / 60))
+        except (ValueError, TypeError):
+            pass
+
+    # Pull tool execution count from progress data as requests fallback
+    requests_sent = _get(stats, "requests_sent", 0)
+    if not requests_sent and scan_data:
+        requests_sent = _get(scan_data, "tools_executed", 0)
+
     return f"""
     <div class="section">
         <h2 class="section-title">Scan Statistics</h2>
@@ -179,11 +203,11 @@ def _build_scan_stats(structured: Optional[dict]) -> str:
                 <div class="stat-label">Subdomains Found</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{_esc(_get(stats, 'requests_sent', 0))}</div>
+                <div class="stat-number">{_esc(requests_sent)}</div>
                 <div class="stat-label">Requests Sent</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{_esc(_get(stats, 'duration_minutes', 0))}m</div>
+                <div class="stat-number">{_esc(duration)}m</div>
                 <div class="stat-label">Duration</div>
             </div>
             <div class="stat-card">
@@ -972,7 +996,7 @@ def generate_pdf_report(scan_data: dict, results: dict) -> bytes:
     # Build each section of the report
     header_html = _build_header_section(scan_data, results)
     summary_html = _build_executive_summary(structured)
-    stats_html = _build_scan_stats(structured)
+    stats_html = _build_scan_stats(structured, scan_data)
     categories_html = _build_categories_tested(structured)
     surface_html = _build_attack_surface(structured)
 

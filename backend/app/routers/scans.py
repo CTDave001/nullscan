@@ -584,6 +584,17 @@ async def download_pdf_report(scan_id: str):
     results = json.loads(result_source["results_json"]) if result_source["results_json"] else {}
 
     from app.pdf_generator import generate_pdf_report
+
+    # Extract tool count from progress data for the PDF stats
+    tools_executed = 0
+    progress_raw = result_source["progress_json"] if result_source["progress_json"] else None
+    if progress_raw:
+        try:
+            prog = json.loads(progress_raw)
+            tools_executed = prog.get("tools", 0)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     scan_data = {
         "id": scan_id,
         "target_url": scan["target_url"],
@@ -592,6 +603,7 @@ async def download_pdf_report(scan_id: str):
         "scan_type": result_source["scan_type"],
         "created_at": str(scan["created_at"]),
         "completed_at": str(result_source["completed_at"]),
+        "tools_executed": tools_executed,
     }
 
     pdf_bytes = generate_pdf_report(scan_data, results)
