@@ -12,9 +12,6 @@ from pathlib import Path
 from app.config import settings
 from app.report_processor import process_scan_report
 
-# Track running scan tasks so they can be cancelled
-_running_scan_tasks: dict[str, asyncio.Task] = {}
-
 
 def _categorize_action(tool_name: str, args: dict, cmd_lower: str = "") -> tuple[str, str]:
     """Categorize action and create user-friendly description."""
@@ -302,8 +299,8 @@ def _determine_scan_phase(tracer, vulnerabilities: list) -> str:
     return "init"
 
 
-# Track per-agent costs so we don't lose data when agents finish and get removed
-_agent_cost_tracker = {}  # scan_id -> {"per_agent": {agent_id: cost}, "banked": float}
+# Track max-seen values so counters never decrease on the dashboard
+_max_cost_seen = {}  # scan_id -> float
 _max_tokens_seen = {}
 
 
@@ -319,31 +316,15 @@ async def _update_progress(
     while True:
         await asyncio.sleep(5)
         try:
-            # Get per-agent costs directly from agent instances
-            from strix.tools.agents_graph.agents_graph_actions import _agent_instances
-
-            if scan_id not in _agent_cost_tracker:
-                _agent_cost_tracker[scan_id] = {"per_agent": {}, "banked": 0.0}
-            tracker = _agent_cost_tracker[scan_id]
-
-            # Update costs for all currently live agents
-            live_agent_ids = set()
-            for aid, agent_inst in _agent_instances.items():
-                live_agent_ids.add(aid)
-                if hasattr(agent_inst, "llm") and hasattr(agent_inst.llm, "_total_stats"):
-                    tracker["per_agent"][aid] = agent_inst.llm._total_stats.cost
-
-            # Bank costs from agents that have been removed
-            for aid in list(tracker["per_agent"].keys()):
-                if aid not in live_agent_ids:
-                    tracker["banked"] += tracker["per_agent"].pop(aid)
-
-            # True accumulated cost = banked (finished agents) + current (live agents)
-            current_cost = tracker["banked"] + sum(tracker["per_agent"].values())
-            current_cost = round(current_cost, 4)
-
             stats = tracer.get_total_llm_stats()
             total = stats.get("total", {})
+
+            # Use tracer cost but track max-seen so it never decreases
+            raw_cost = total.get("cost", 0.0)
+            if scan_id not in _max_cost_seen:
+                _max_cost_seen[scan_id] = 0.0
+            _max_cost_seen[scan_id] = max(_max_cost_seen[scan_id], raw_cost)
+            current_cost = _max_cost_seen[scan_id]
 
             # Check cost limit — tell the agent to wrap up
             if cost_limit > 0 and current_cost >= cost_limit and agent and not _cost_warning_sent:
@@ -500,6 +481,11 @@ async def run_strix_scan_async(
         from strix.telemetry.tracer import Tracer, set_global_tracer
 
         apply_saved_config()
+
+        # Reset max-seen trackers for this scan
+        _max_cost_seen.pop(scan_id, None)
+        _max_tokens_seen.pop(scan_id, None)
+
         print(f"[strix] Starting {scan_mode} scan for {target_url} (max {max_iterations} iters, {max_agents} agents, {wait_timeout}s timeout)")
 
         # Build target info (same as Strix CLI)
@@ -566,17 +552,10 @@ async def run_strix_scan_async(
             if scan_id:
                 try:
                     from app.database import database, scans as scans_table
-                    from strix.tools.agents_graph.agents_graph_actions import _agent_instances as _err_agents
-                    tracker = _agent_cost_tracker.get(scan_id, {"per_agent": {}, "banked": 0.0})
-                    for aid, ai in _err_agents.items():
-                        if hasattr(ai, "llm") and hasattr(ai.llm, "_total_stats"):
-                            tracker["per_agent"][aid] = ai.llm._total_stats.cost
-                    for aid in list(tracker["per_agent"].keys()):
-                        tracker["banked"] += tracker["per_agent"].pop(aid)
-                    err_cost = round(tracker["banked"], 4)
+                    err_cost = _max_cost_seen.get(scan_id, tracer.get_total_llm_stats().get("total", {}).get("cost", 0.0))
                     existing = await database.fetch_one(scans_table.select().where(scans_table.c.id == scan_id))
                     progress = json.loads(existing["progress_json"]) if existing and existing["progress_json"] else {}
-                    progress["cost"] = err_cost
+                    progress["cost"] = round(err_cost, 4)
                     progress["active_agents"] = 0
                     await database.execute(scans_table.update().where(scans_table.c.id == scan_id).values(progress_json=json.dumps(progress)))
                 except Exception:
@@ -621,26 +600,19 @@ async def run_strix_scan_async(
         if pre_filter_count > 0 and len(findings) == 0:
             print(f"[strix] WARNING: All findings filtered out! Titles were: {[f.get('title', '') for f in parse_strix_run_dir(run_name)]}", flush=True)
 
-        # Write final progress with accumulated cost before cancelling
+        # Write final progress before cancelling
         if progress_task:
             progress_task.cancel()
         if scan_id:
             try:
                 from app.database import database, scans
-                from strix.tools.agents_graph.agents_graph_actions import _agent_instances as _final_agents
-
-                # Calculate final cost from tracker + any remaining live agents
-                tracker = _agent_cost_tracker.get(scan_id, {"per_agent": {}, "banked": 0.0})
-                for aid, agent_inst in _final_agents.items():
-                    if hasattr(agent_inst, "llm") and hasattr(agent_inst.llm, "_total_stats"):
-                        tracker["per_agent"][aid] = agent_inst.llm._total_stats.cost
-                # Bank all remaining
-                for aid in list(tracker["per_agent"].keys()):
-                    tracker["banked"] += tracker["per_agent"].pop(aid)
-                final_cost = round(tracker["banked"], 4)
 
                 final_stats = tracer.get_total_llm_stats()
                 final_total = final_stats.get("total", {})
+                final_cost = max(
+                    final_total.get("cost", 0.0),
+                    _max_cost_seen.get(scan_id, 0.0),
+                )
                 final_tokens = max(
                     final_total.get("input_tokens", 0),
                     _max_tokens_seen.get(scan_id, 0),
@@ -652,7 +624,7 @@ async def run_strix_scan_async(
                 progress = {}
                 if existing and existing["progress_json"]:
                     progress = json.loads(existing["progress_json"])
-                progress["cost"] = final_cost
+                progress["cost"] = round(final_cost, 4)
                 progress["input_tokens"] = final_tokens
                 progress["output_tokens"] = final_total.get("output_tokens", 0)
                 progress["active_agents"] = 0
@@ -662,9 +634,9 @@ async def run_strix_scan_async(
                     .where(scans.c.id == scan_id)
                     .values(progress_json=json.dumps(progress))
                 )
-                print(f"[strix] Final cost: ${final_cost:.4f}")
+                print(f"[strix] Final cost: ${final_cost:.4f}", flush=True)
             except Exception as e:
-                print(f"[strix] Warning: Failed to write final progress: {e}")
+                print(f"[strix] Warning: Failed to write final progress: {e}", flush=True)
 
         # If still no findings but we had vulnerabilities in progress, log warning
         if not findings and vulnerabilities:
