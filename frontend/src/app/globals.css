@@ -403,3 +403,54 @@ body {
 .animate-blink {
   animation: blink 1s infinite;
 }
+
+/* ================================================================
+   Mobile Utilities
+   ================================================================ */
+
+/* Safe area padding for notched devices */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Disable grid backgrounds on mobile for performance */
+@media (max-width: 767px) {
+  .grid-bg,
+  .grid-bg-dense {
+    background-image: none !important;
+  }
+}
+
+/* Reduce motion for accessibility and battery */
+@media (prefers-reduced-motion: reduce) {
+  .animate-scan-line,
+  .animate-data-stream,
+  .animate-pulse-ring,
+  .animate-status-pulse,
+  .animate-fade-in-up,
+  .animate-glitch:hover,
+  .animate-h-scan,
+  .animate-typewriter,
+  .animate-count,
+  .animate-blink,
+  .cursor-blink::after {
+    animation: none !important;
+  }
+  .stagger-children > * {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+
+/* Scroll-snap utilities for mobile carousels */
+.snap-x {
+  scroll-snap-type: x mandatory;
+}
+
+.snap-center {
+  scroll-snap-align: center;
+}

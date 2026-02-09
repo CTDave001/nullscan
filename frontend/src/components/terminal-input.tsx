@@ -333,7 +333,7 @@ export function TerminalInput() {
       {/* Terminal content */}
       <div
         ref={terminalRef}
-        className="p-4 2xl:p-6 h-[320px] 2xl:h-[420px] overflow-y-auto font-mono text-sm 2xl:text-base"
+        className="p-4 2xl:p-6 h-[220px] sm:h-[280px] lg:h-[320px] 2xl:h-[420px] overflow-y-auto font-mono text-xs sm:text-sm 2xl:text-base"
         style={{ backgroundColor: "var(--bg)" }}
       >
         {lines.map((line, i) => (
@@ -357,7 +357,7 @@ export function TerminalInput() {
         {!isLoading && (
           <form
             onSubmit={handleSubmit}
-            className="flex items-center mt-2 -mx-2 px-2 py-1.5 rounded-[var(--radius-sm)] transition-all"
+            className="flex items-center mt-2 -mx-2 px-2 py-1.5 min-h-[44px] rounded-[var(--radius-sm)] transition-all"
             style={{
               backgroundColor: step === "url" ? "var(--cyan-glow)" : "transparent",
               border: step === "url" ? "1px solid var(--cyan)" : "1px solid transparent",
@@ -371,7 +371,7 @@ export function TerminalInput() {
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               onBlur={handleBlur}
-              className="flex-1 ml-2 bg-transparent outline-none font-mono text-sm 2xl:text-base"
+              className="flex-1 ml-2 bg-transparent outline-none font-mono text-xs sm:text-sm 2xl:text-base"
               style={{ color: "var(--text)", caretColor: "var(--cyan)" }}
               placeholder={
                 step === "url" ? "example.com" :

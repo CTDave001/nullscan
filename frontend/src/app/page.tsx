@@ -6,6 +6,7 @@ import { Navbar } from "@/components/navbar"
 import { TerminalInput } from "@/components/terminal-input"
 import { ScanTicker } from "@/components/scan-ticker"
 import { ProcessSection } from "@/components/process-section"
+import { MobileProcessSection } from "@/components/mobile-process-section"
 import { Footer } from "@/components/footer"
 import { Check, X } from "lucide-react"
 
@@ -28,13 +29,13 @@ export default function LandingPage() {
       <CornerMarkers />
       <Navbar withStatusBar />
 
-      <main className="relative z-10 pt-32 2xl:pt-40 pb-20">
+      <main className="relative z-10 pt-24 lg:pt-32 2xl:pt-40 pb-20">
         {/* Hero Section */}
-        <section className="px-6 2xl:px-12 mb-32 2xl:mb-40">
+        <section className="px-4 sm:px-6 2xl:px-12 mb-16 lg:mb-32 2xl:mb-40">
           <div className="max-w-7xl 2xl:max-w-[1600px] mx-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 2xl:gap-24 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 2xl:gap-24 items-start">
               {/* Left Column - Copy */}
-              <div className="space-y-8 2xl:space-y-10 stagger-children">
+              <div className="space-y-6 sm:space-y-8 2xl:space-y-10 stagger-children">
                 {/* Label */}
                 <div
                   className="inline-flex items-center gap-2 px-3 py-1.5 2xl:px-4 2xl:py-2 rounded-[var(--radius-sm)] font-mono text-[10px] 2xl:text-xs uppercase tracking-wider"
@@ -49,7 +50,7 @@ export default function LandingPage() {
                 </div>
 
                 {/* Headline */}
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl 2xl:text-7xl font-bold leading-[1.1] tracking-tight">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl 2xl:text-7xl font-bold leading-[1.1] tracking-tight">
                   <span style={{ color: "var(--text)" }}>See what</span>
                   <br />
                   <span className="glow-text-cyan" style={{ color: "var(--cyan)" }}>attackers see.</span>
@@ -57,7 +58,7 @@ export default function LandingPage() {
 
                 {/* Subheadline */}
                 <p
-                  className="text-lg 2xl:text-xl max-w-md 2xl:max-w-lg leading-relaxed"
+                  className="text-base sm:text-lg 2xl:text-xl max-w-md 2xl:max-w-lg leading-relaxed"
                   style={{ color: "var(--text-secondary)" }}
                 >
                   AI-powered penetration testing that probes your application like a real adversary.
@@ -65,15 +66,15 @@ export default function LandingPage() {
                 </p>
 
                 {/* Attack Vectors */}
-                <div className="pt-4 2xl:pt-6">
+                <div className="pt-2 sm:pt-4 2xl:pt-6">
                   <p className="font-mono text-[10px] 2xl:text-xs uppercase tracking-wider mb-4" style={{ color: "var(--text-dim)" }}>
                     Attack Vectors
                   </p>
-                  <div className="flex flex-wrap gap-2 2xl:gap-3">
+                  <div className="flex flex-nowrap overflow-x-auto snap-x gap-2 pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 2xl:gap-3 scrollbar-none">
                     {ATTACK_VECTORS.map((vector) => (
                       <span
                         key={vector}
-                        className="px-2.5 py-1 2xl:px-3 2xl:py-1.5 font-mono text-[11px] 2xl:text-xs rounded-[var(--radius-sm)] transition-colors hover:border-[var(--cyan)]"
+                        className="shrink-0 snap-center px-2.5 py-1 2xl:px-3 2xl:py-1.5 font-mono text-[11px] 2xl:text-xs rounded-[var(--radius-sm)] transition-colors hover:border-[var(--cyan)]"
                         style={{
                           backgroundColor: "var(--surface)",
                           border: "1px solid var(--border)",
@@ -100,14 +101,19 @@ export default function LandingPage() {
 
       </main>
 
-      {/* How It Works - Scroll-driven (outside main for sticky to work) */}
-      <ProcessSection />
+      {/* How It Works - Mobile: simple stepper */}
+      <MobileProcessSection />
+
+      {/* How It Works - Desktop: Scroll-driven (outside main for sticky to work) */}
+      <div className="hidden lg:block">
+        <ProcessSection />
+      </div>
 
       <main className="relative z-10">
         {/* Pricing */}
-        <section id="pricing" className="py-24 2xl:py-32 px-6 2xl:px-12">
+        <section id="pricing" className="py-16 sm:py-24 2xl:py-32 px-4 sm:px-6 2xl:px-12">
           <div className="max-w-5xl 2xl:max-w-[1400px] mx-auto">
-            <div className="text-center mb-16 2xl:mb-20">
+            <div className="text-center mb-12 sm:mb-16 2xl:mb-20">
               <p
                 className="font-mono text-[10px] 2xl:text-xs uppercase tracking-wider mb-4"
                 style={{ color: "var(--cyan)" }}
@@ -115,23 +121,24 @@ export default function LandingPage() {
                 Pricing
               </p>
               <h2
-                className="text-3xl sm:text-4xl 2xl:text-5xl font-bold mb-4"
+                className="text-2xl sm:text-3xl md:text-4xl 2xl:text-5xl font-bold mb-4"
                 style={{ color: "var(--text)" }}
               >
                 Simple, transparent pricing
               </h2>
               <p
-                className="text-base 2xl:text-lg max-w-md 2xl:max-w-lg mx-auto"
+                className="text-sm sm:text-base 2xl:text-lg max-w-md 2xl:max-w-lg mx-auto"
                 style={{ color: "var(--text-muted)" }}
               >
                 Start free, upgrade when you need detailed reports and remediation guidance.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 2xl:gap-6">
+            {/* Pricing cards: horizontal scroll on mobile, grid on md+ */}
+            <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 md:grid md:grid-cols-2 md:overflow-visible md:pb-0 lg:grid-cols-4 2xl:gap-6 scrollbar-none">
               {/* Free Tier */}
               <div
-                className="rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col"
+                className="min-w-[280px] snap-center shrink-0 md:min-w-0 md:shrink rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col"
                 style={{
                   backgroundColor: "var(--surface)",
                   border: "1px solid var(--border)",
@@ -192,7 +199,7 @@ export default function LandingPage() {
 
               {/* Unlock Tier */}
               <div
-                className="rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col"
+                className="min-w-[280px] snap-center shrink-0 md:min-w-0 md:shrink rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col"
                 style={{
                   backgroundColor: "var(--surface)",
                   border: "1px solid var(--border)",
@@ -248,7 +255,7 @@ export default function LandingPage() {
 
               {/* Pro Tier - Highlighted */}
               <div
-                className="rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col relative"
+                className="min-w-[280px] snap-center shrink-0 md:min-w-0 md:shrink rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col relative"
                 style={{
                   backgroundColor: "var(--surface)",
                   border: "1px solid var(--cyan)",
@@ -310,7 +317,7 @@ export default function LandingPage() {
 
               {/* Deep Analysis Tier */}
               <div
-                className="rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col"
+                className="min-w-[280px] snap-center shrink-0 md:min-w-0 md:shrink rounded-[var(--radius)] p-6 2xl:p-8 flex flex-col"
                 style={{
                   backgroundColor: "var(--surface)",
                   border: "1px solid var(--border)",

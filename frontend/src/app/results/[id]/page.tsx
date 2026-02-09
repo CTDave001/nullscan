@@ -342,27 +342,27 @@ export default function ResultsPage() {
       <main className="relative z-10 pt-16">
         {/* Header Bar */}
         <div
-          className="border-b px-6 py-3 flex items-center justify-between"
+          className="border-b px-4 sm:px-6 py-3 flex items-center justify-between"
           style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)" }}
         >
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <NullscanLogo size="sm" iconOnly />
             <div className="h-4 w-px" style={{ backgroundColor: "var(--border)" }} />
             <span className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
               Intelligence Report
             </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <span className="font-mono text-[10px] uppercase" style={{ color: "var(--text-dim)" }}>
               ID: {scanId.slice(0, 8)}
             </span>
             <button
               onClick={handlePdfClick}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-sm)] font-mono text-[10px] uppercase tracking-wider transition-all hover:border-[var(--cyan)]"
+              className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-[var(--radius-sm)] font-mono text-[10px] uppercase tracking-wider transition-all hover:border-[var(--cyan)]"
               style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
             >
               <FileText className="w-3 h-3" />
-              Send PDF Report
+              <span className="hidden sm:inline">Send PDF Report</span>
             </button>
           </div>
         </div>
@@ -370,18 +370,18 @@ export default function ResultsPage() {
         {/* Free Scan Expiration Warning */}
         {!isPaid && results.expires_in_days != null && results.expires_in_days <= 30 && (
           <div
-            className="px-6 py-2.5 flex items-center justify-between"
+            className="px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2"
             style={{ backgroundColor: "#422006", borderBottom: "1px solid #854d0e" }}
           >
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-3.5 h-3.5" style={{ color: "#eab308" }} />
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "#eab308" }} />
               <span className="font-mono text-xs" style={{ color: "#fde68a" }}>
                 Free report expires in {results.expires_in_days} day{results.expires_in_days !== 1 ? "s" : ""}. Unlock to keep it permanently.
               </span>
             </div>
             <button
               onClick={() => openCheckout()}
-              className="px-3 py-1 rounded-[var(--radius-sm)] font-mono text-[10px] uppercase tracking-wider"
+              className="shrink-0 px-3 py-1 rounded-[var(--radius-sm)] font-mono text-[10px] uppercase tracking-wider"
               style={{ backgroundColor: "#eab308", color: "#09090b" }}
             >
               Unlock — $39
@@ -391,7 +391,7 @@ export default function ResultsPage() {
 
         {/* Risk Banner */}
         <div
-          className="px-6 py-6 border-b"
+          className="px-4 sm:px-6 py-6 border-b"
           style={{
             backgroundColor: "var(--bg)",
             borderColor: "var(--border)",
@@ -403,7 +403,7 @@ export default function ResultsPage() {
               <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--text-dim)" }}>
                 Target
               </p>
-              <p className="font-mono text-xl" style={{ color: "var(--text)" }}>
+              <p className="font-mono text-base sm:text-xl truncate" style={{ color: "var(--text)" }}>
                 {results.target_url}
               </p>
             </div>
@@ -452,20 +452,20 @@ export default function ResultsPage() {
         {/* Stats strip */}
         {stats && (
           <div className="border-b" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)" }}>
-            <div className="max-w-6xl mx-auto px-6 py-3">
-              <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-[13px] font-mono" style={{ color: "var(--text-muted)" }}>
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-6 sm:gap-y-1 text-[13px] font-mono" style={{ color: "var(--text-muted)" }}>
                 <span>
                   <span style={{ color: "var(--text)" }}>{formatNumber(stats.endpoints_tested)}</span> endpoints tested
                 </span>
-                <span style={{ color: "var(--text-dim)" }}>{"\u00B7"}</span>
+                <span className="hidden sm:inline" style={{ color: "var(--text-dim)" }}>{"\u00B7"}</span>
                 <span>
                   <span style={{ color: "var(--text)" }}>{formatNumber(stats.requests_sent)}</span> requests
                 </span>
-                <span style={{ color: "var(--text-dim)" }}>{"\u00B7"}</span>
+                <span className="hidden sm:inline" style={{ color: "var(--text-dim)" }}>{"\u00B7"}</span>
                 <span>
                   <span style={{ color: "var(--text)" }}>{stats.duration_minutes}</span> min
                 </span>
-                <span style={{ color: "var(--text-dim)" }}>{"\u00B7"}</span>
+                <span className="hidden sm:inline" style={{ color: "var(--text-dim)" }}>{"\u00B7"}</span>
                 <span>
                   <span style={{ color: "var(--text)" }}>{areasOfInterest.length || results.findings.length}</span> areas of interest
                 </span>
@@ -474,8 +474,8 @@ export default function ResultsPage() {
           </div>
         )}
 
-        <div className="max-w-6xl mx-auto px-6 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
             {/* Main Content */}
             <div className="lg:col-span-8 space-y-6">
               {/* Executive Summary */}
@@ -804,7 +804,7 @@ export default function ResultsPage() {
             </div>
 
             {/* Sidebar */}
-            <div className="lg:col-span-4 space-y-6">
+            <div className="order-first lg:order-last lg:col-span-4 space-y-6">
               {/* Unlock Card */}
               {!isPaid && (areasOfInterest.length > 0 || results.findings.length > 0) && (
                 <div

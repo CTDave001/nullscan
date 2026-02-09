@@ -1,7 +1,7 @@
 export function GridOverlay({ dense = false }: { dense?: boolean }) {
   return (
     <div
-      className={`fixed inset-0 pointer-events-none z-0 ${dense ? 'grid-bg-dense' : 'grid-bg'}`}
+      className={`fixed inset-0 pointer-events-none z-0 hidden md:block ${dense ? 'grid-bg-dense' : 'grid-bg'}`}
       aria-hidden="true"
     />
   )

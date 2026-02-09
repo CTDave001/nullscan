@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { NullscanLogo } from "./nullscan-logo"
+import { MobileNav } from "./mobile-nav"
 
 interface NavbarProps {
   withStatusBar?: boolean
@@ -29,10 +30,11 @@ export function Navbar({ withStatusBar = false }: NavbarProps) {
         backgroundColor: "transparent",
       }}
     >
-      <nav className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto px-6 2xl:px-12 flex items-center justify-between">
+      <nav className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 2xl:px-12 flex items-center justify-between">
         <NullscanLogo size="md" />
 
-        <div className="flex items-center gap-8 2xl:gap-10 font-mono text-xs 2xl:text-sm uppercase tracking-wider">
+        {/* Desktop links */}
+        <div className="hidden lg:flex items-center gap-8 2xl:gap-10 font-mono text-xs 2xl:text-sm uppercase tracking-wider">
           <Link
             href="/#pricing"
             className="transition-colors"
@@ -68,6 +70,9 @@ export function Navbar({ withStatusBar = false }: NavbarProps) {
             Launch Scan
           </button>
         </div>
+
+        {/* Mobile hamburger */}
+        <MobileNav />
       </nav>
     </header>
   )
