@@ -164,6 +164,14 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
+/* Hide scrollbar completely */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
 /* ================================================================
    Grid Background Patterns
    ================================================================ */

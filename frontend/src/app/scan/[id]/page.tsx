@@ -67,6 +67,7 @@ export default function ScanStatusPage() {
   const [elapsed, setElapsed] = useState(0)
   const [maxTokens, setMaxTokens] = useState(0)
   const activityRef = useRef<HTMLDivElement>(null)
+  const userScrolledUp = useRef(false)
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60)
@@ -114,12 +115,19 @@ export default function ScanStatusPage() {
     return () => clearInterval(tick)
   }, [scan?.created_at])
 
-  // Auto-scroll activity log
+  // Auto-scroll activity log (freeze when user scrolls up, resume at bottom)
   useEffect(() => {
-    if (activityRef.current) {
+    if (activityRef.current && !userScrolledUp.current) {
       activityRef.current.scrollTop = activityRef.current.scrollHeight
     }
   }, [progress.recent_activity])
+
+  const handleActivityScroll = useCallback(() => {
+    const el = activityRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    userScrolledUp.current = distanceFromBottom > 40
+  }, [])
 
   // Fetch scan and progress
   const fetchData = useCallback(async () => {
@@ -296,7 +304,7 @@ export default function ScanStatusPage() {
               <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--text-dim)" }}>
                 Active Agents ({progress.active_agents ?? 0}/{progress.agents ?? 0})
               </p>
-              <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+              <div className="space-y-2 max-h-[40vh] overflow-y-auto scrollbar-none">
                 {activeAgents.length > 0 ? (
                   activeAgents.map((agent, i) => (
                     <div
@@ -373,8 +381,9 @@ export default function ScanStatusPage() {
             </div>
             <div
               ref={activityRef}
-              className="flex-1 p-4 overflow-y-auto font-mono text-xs"
-              style={{ backgroundColor: "var(--bg)" }}
+              onScroll={handleActivityScroll}
+              className="p-4 overflow-y-auto scrollbar-none font-mono text-xs"
+              style={{ backgroundColor: "var(--bg)", height: "calc(100vh - 8rem - 41px)" }}
             >
               <div className="py-1" style={{ color: "var(--text-muted)" }}>
                 <span style={{ color: "var(--text-dim)" }}>000</span> Nullscan engine initialized. Target: {scan?.target_url ?? "..."}
@@ -415,6 +424,9 @@ export default function ScanStatusPage() {
                   <span className="animate-status-pulse">_</span>
                 </div>
               )}
+
+              {/* Spacer so the last entry rests in the middle of the viewport */}
+              <div style={{ height: "40vh" }} />
             </div>
           </div>
 
