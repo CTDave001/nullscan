@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Nullscan OG Image Generator</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Geist Mono', 'SF Mono', 'Fira Code', monospace;
+    }
+
+    .og-card {
+      width: 1200px;
+      height: 630px;
+      background: #050505;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* Subtle grid background */
+    .og-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(6, 182, 212, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(6, 182, 212, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      z-index: 0;
+    }
+
+    /* Gradient glow top-right */
+    .og-card::after {
+      content: '';
+      position: absolute;
+      top: -100px;
+      right: -100px;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(6, 182, 212, 0.08) 0%, transparent 70%);
+      z-index: 0;
+    }
+
+    /* Left content area */
+    .left {
+      flex: 1;
+      padding: 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      z-index: 1;
+      position: relative;
+    }
+
+    /* Right terminal area */
+    .right {
+      width: 520px;
+      padding: 40px 50px 40px 0;
+      display: flex;
+      align-items: center;
+      z-index: 1;
+      position: relative;
+    }
+
+    /* Logo */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 36px;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      border: 2px solid #06b6d4;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .logo-icon::before {
+      content: '';
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #06b6d4;
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.6);
+    }
+
+    .logo-text {
+      font-size: 22px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+    }
+
+    /* Headline */
+    .headline {
+      font-size: 42px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.15;
+      margin-bottom: 20px;
+      letter-spacing: -0.5px;
+    }
+
+    .headline span {
+      color: #06b6d4;
+    }
+
+    /* Subtext */
+    .subtext {
+      font-size: 16px;
+      color: #a3a3a3;
+      line-height: 1.6;
+      margin-bottom: 36px;
+      max-width: 420px;
+    }
+
+    /* CTA bar */
+    .cta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .cta-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      border-radius: 6px;
+      font-size: 13px;
+      color: #06b6d4;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-weight: 600;
+    }
+
+    .cta-badge::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #06b6d4;
+      box-shadow: 0 0 8px rgba(6, 182, 212, 0.8);
+    }
+
+    .cta-url {
+      font-size: 14px;
+      color: #525252;
+      letter-spacing: 1px;
+    }
+
+    /* Terminal mockup */
+    .terminal {
+      width: 100%;
+      background: #0a0a0a;
+      border: 1px solid #1a1a1a;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow:
+        0 0 60px rgba(6, 182, 212, 0.05),
+        0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 18px;
+      background: #0f0f0f;
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    .terminal-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .terminal-dot.red { background: #ff3b30; }
+    .terminal-dot.yellow { background: #ffcc00; }
+    .terminal-dot.green { background: #34c759; }
+
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      font-size: 11px;
+      color: #525252;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .terminal-body {
+      padding: 24px;
+    }
+
+    .terminal-line {
+      display: flex;
+      align-items: center;
+      margin-bottom: 14px;
+      font-size: 12.5px;
+    }
+
+    .terminal-line:last-child {
+      margin-bottom: 0;
+    }
+
+    .prompt {
+      color: #06b6d4;
+      margin-right: 10px;
+      font-weight: 600;
+    }
+
+    .label {
+      color: #525252;
+      margin-right: 8px;
+    }
+
+    .value {
+      color: #e5e5e5;
+    }
+
+    .value.cyan { color: #06b6d4; }
+    .value.green { color: #34c759; }
+    .value.yellow { color: #ffcc00; }
+    .value.red { color: #ff3b30; }
+
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 16px;
+      background: #06b6d4;
+      margin-left: 4px;
+      opacity: 0.8;
+    }
+
+    /* Scan results section */
+    .terminal-results {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid #1a1a1a;
+    }
+
+    .result-header {
+      font-size: 10px;
+      color: #525252;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      margin-bottom: 14px;
+    }
+
+    .finding-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 12px;
+    }
+
+    .finding-row + .finding-row {
+      border-top: 1px solid #111;
+    }
+
+    .finding-name {
+      color: #d4d4d4;
+    }
+
+    .severity-badge {
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .severity-badge.critical {
+      background: rgba(255, 59, 48, 0.15);
+      color: #ff3b30;
+    }
+
+    .severity-badge.high {
+      background: rgba(255, 149, 0, 0.15);
+      color: #ff9500;
+    }
+
+    .severity-badge.medium {
+      background: rgba(255, 204, 0, 0.15);
+      color: #ffcc00;
+    }
+
+    /* Bottom stats bar */
+    .terminal-stats {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: #0f0f0f;
+      border-top: 1px solid #1a1a1a;
+      font-size: 10px;
+      color: #525252;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    .stat-value {
+      color: #06b6d4;
+      font-weight: 600;
+    }
+
+    /* Divider line between left and right */
+    .divider {
+      width: 1px;
+      align-self: stretch;
+      margin: 60px 0;
+      background: linear-gradient(to bottom, transparent, #1a1a1a, transparent);
+      z-index: 1;
+    }
+
+    /* Instructions - not part of the screenshot */
+    .instructions {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a1a1a;
+      color: #a3a3a3;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-family: system-ui, sans-serif;
+      font-size: 14px;
+      z-index: 100;
+    }
+
+    .instructions strong {
+      color: #06b6d4;
+    }
+  </style>
+</head>
+<body>
+  <div class="og-card" id="og-card">
+    <!-- Left: Branding + Copy -->
+    <div class="left">
+      <div class="logo">
+        <div class="logo-icon"></div>
+        <div class="logo-text">Nullscan</div>
+      </div>
+
+      <h1 class="headline">
+        Find Vulnerabilities<br>
+        <span>Before Attackers Do</span>
+      </h1>
+
+      <p class="subtext">
+        AI-powered penetration testing for web apps. Paste your URL, get a real security scan in minutes.
+      </p>
+
+      <div class="cta">
+        <div class="cta-badge">Free Scan</div>
+        <span class="cta-url">nullscan.io</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Right: Terminal Mockup -->
+    <div class="right">
+      <div class="terminal">
+        <div class="terminal-header">
+          <div class="terminal-dot red"></div>
+          <div class="terminal-dot yellow"></div>
+          <div class="terminal-dot green"></div>
+          <div class="terminal-title">nullscan</div>
+        </div>
+
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="prompt">&gt;</span>
+            <span class="label">target:</span>
+            <span class="value cyan">yourapp.com</span>
+            <span class="cursor"></span>
+          </div>
+          <div class="terminal-line">
+            <span class="prompt">&gt;</span>
+            <span class="label">status:</span>
+            <span class="value green">scan complete</span>
+          </div>
+          <div class="terminal-line">
+            <span class="prompt">&gt;</span>
+            <span class="label">agents:</span>
+            <span class="value">15 deployed</span>
+          </div>
+          <div class="terminal-line">
+            <span class="prompt">&gt;</span>
+            <span class="label">findings:</span>
+            <span class="value red">6 vulnerabilities found</span>
+          </div>
+
+          <div class="terminal-results">
+            <div class="result-header">Findings</div>
+            <div class="finding-row">
+              <span class="finding-name">SQL Injection — /api/users</span>
+              <span class="severity-badge critical">Critical</span>
+            </div>
+            <div class="finding-row">
+              <span class="finding-name">Auth Bypass — /api/admin</span>
+              <span class="severity-badge high">High</span>
+            </div>
+            <div class="finding-row">
+              <span class="finding-name">XSS — /search</span>
+              <span class="severity-badge medium">Medium</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="terminal-stats">
+          <span><span class="stat-value">142</span> endpoints</span>
+          <span><span class="stat-value">3,847</span> requests</span>
+          <span><span class="stat-value">8</span> min</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="instructions">
+    Screenshot the card above at <strong>1200x630</strong> &mdash; save as <strong>og-image.png</strong> in <strong>frontend/public/</strong>
+  </div>
+</body>
+</html>

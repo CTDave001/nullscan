@@ -100,10 +100,13 @@ function CheckoutForm({
     const { error: submitError, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        return_url: `${window.location.origin}/results/${scanId}`,
+        return_url: `${window.location.origin}/results/${scanId}?payment_success=true&tier=${tier.id}`,
       },
       redirect: "if_required",
     })
+
+    // If Stripe redirected (e.g. for Link authentication), we won't reach here.
+    // The return_url handles post-redirect confirmation.
 
     if (submitError) {
       setError(submitError.message || "Payment failed")
@@ -177,6 +180,7 @@ function CheckoutForm({
         <PaymentElement
           options={{
             layout: "tabs",
+            paymentMethodOrder: ["link", "card"],
           }}
           onLoadError={(error) => {
             console.error("PaymentElement load error:", error)

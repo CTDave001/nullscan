@@ -9,6 +9,7 @@ import { ProcessSection } from "@/components/process-section"
 import { MobileProcessSection } from "@/components/mobile-process-section"
 import { Footer } from "@/components/footer"
 import { Check, X } from "lucide-react"
+import { useState } from "react"
 
 const ATTACK_VECTORS = [
   "SQL Injection",
@@ -22,6 +23,21 @@ const ATTACK_VECTORS = [
 ]
 
 export default function LandingPage() {
+  const [selectedTier, setSelectedTier] = useState<"pro" | "deep" | null>(null)
+
+  const selectTierAndScroll = (tier: "pro" | "deep") => {
+    setSelectedTier(tier)
+    const terminal = document.getElementById("terminal")
+    if (terminal) {
+      terminal.scrollIntoView({ behavior: "smooth", block: "center" })
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("launch-scan"))
+        const input = terminal.querySelector("input")
+        input?.focus()
+      }, 500)
+    }
+  }
+
   return (
     <div className="min-h-screen relative">
       <StatusBar />
@@ -90,7 +106,7 @@ export default function LandingPage() {
 
               {/* Right Column - Terminal */}
               <div className="lg:pt-8 2xl:pt-12">
-                <TerminalInput />
+                <TerminalInput paidTier={selectedTier} />
               </div>
             </div>
           </div>
@@ -306,13 +322,13 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <a
-                  href="#terminal"
-                  className="block w-full py-2.5 rounded-[var(--radius-sm)] font-mono text-xs uppercase tracking-wider text-center transition-all"
+                <button
+                  onClick={() => selectTierAndScroll("pro")}
+                  className="block w-full py-2.5 rounded-[var(--radius-sm)] font-mono text-xs uppercase tracking-wider text-center transition-all cursor-pointer"
                   style={{ backgroundColor: "var(--cyan)", color: "var(--void)" }}
                 >
                   Start Pro Scan
-                </a>
+                </button>
               </div>
 
               {/* Deep Analysis Tier */}
@@ -361,13 +377,13 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <a
-                  href="#terminal"
-                  className="block w-full py-2.5 rounded-[var(--radius-sm)] font-mono text-xs uppercase tracking-wider text-center transition-all"
+                <button
+                  onClick={() => selectTierAndScroll("deep")}
+                  className="block w-full py-2.5 rounded-[var(--radius-sm)] font-mono text-xs uppercase tracking-wider text-center transition-all cursor-pointer"
                   style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
                 >
                   Start Deep Scan
-                </a>
+                </button>
               </div>
             </div>
 

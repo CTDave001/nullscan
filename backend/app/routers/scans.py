@@ -210,7 +210,10 @@ async def create_payment_intent(scan_id: str, tier: str):
                 "tier": tier,
             },
             receipt_email=scan["email"],
-            automatic_payment_methods={"enabled": True},
+            automatic_payment_methods={
+                "enabled": True,
+                "allow_redirects": "always",
+            },
         )
 
         return {

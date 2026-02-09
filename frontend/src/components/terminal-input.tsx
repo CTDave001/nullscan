@@ -3,22 +3,23 @@
 import React, { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 
-type ScanTier = "free" | "pro" | "deep"
+type PaidTier = "pro" | "deep" | null
 
-const TIER_INFO: Record<ScanTier, { name: string; price: number; desc: string }> = {
-  free: { name: "Free Scan", price: 0, desc: "Quick scan with basic findings" },
-  pro: { name: "Pro Scan", price: 250, desc: "300 iterations, 25 agents, detailed report" },
-  deep: { name: "Deep Analysis", price: 899, desc: "500 iterations, 40 agents, full coverage" },
+const TIER_LABELS: Record<string, string> = {
+  pro: "Pro Scan ($250)",
+  deep: "Deep Analysis ($899)",
 }
 
-export function TerminalInput() {
+interface TerminalInputProps {
+  paidTier?: PaidTier
+}
+
+export function TerminalInput({ paidTier = null }: TerminalInputProps) {
   const router = useRouter()
   const [url, setUrl] = useState("")
   const [email, setEmail] = useState("")
   const [consentInput, setConsentInput] = useState("")
-  const [tierInput, setTierInput] = useState("")
-  const [selectedTier, setSelectedTier] = useState<ScanTier>("free")
-  const [step, setStep] = useState<"url" | "email" | "tier" | "consent" | "confirm">("url")
+  const [step, setStep] = useState<"url" | "email" | "consent" | "confirm">("url")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [showHint, setShowHint] = useState(false)
@@ -84,41 +85,15 @@ export function TerminalInput() {
       setStep("email")
     } else if (step === "email") {
       if (!email.trim() || !email.includes("@")) return
+      const tierLabel = paidTier ? TIER_LABELS[paidTier] : "Free Scan"
       setLines(prev => [
         ...prev,
         `> ${email}`,
         "",
-        "Select scan type:",
-        "",
-        "  [1] Free   — Quick scan, basic findings ($0)",
-        "  [2] Pro    — 300 iterations, detailed report ($250)",
-        "  [3] Deep   — 500 iterations, full coverage ($899)",
-        "",
-        "Enter 1, 2, or 3:",
-      ])
-      setStep("tier")
-    } else if (step === "tier") {
-      const input = tierInput.trim()
-      const tierMap: Record<string, ScanTier> = { "1": "free", "2": "pro", "3": "deep", "free": "free", "pro": "pro", "deep": "deep" }
-      const tier = tierMap[input.toLowerCase()]
-      if (!tier) {
-        setLines(prev => [...prev, `> ${input}`, "", "ERROR: Enter 1, 2, or 3."])
-        setTierInput("")
-        return
-      }
-      setSelectedTier(tier)
-      setTierInput("")
-      const info = TIER_INFO[tier]
-      setLines(prev => [
-        ...prev,
-        `> ${input}`,
-        "",
-        `Selected: ${info.name}${info.price > 0 ? ` ($${info.price})` : ""}`,
-        "",
         "\u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
         `\u2502  TARGET: ${url.slice(0, 28).padEnd(28)}\u2502`,
         `\u2502  EMAIL:  ${email.slice(0, 28).padEnd(28)}\u2502`,
-        `\u2502  TYPE:   ${info.name.slice(0, 28).padEnd(28)}\u2502`,
+        `\u2502  TYPE:   ${tierLabel.slice(0, 28).padEnd(28)}\u2502`,
         "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
         "",
         "AUTHORIZATION REQUIRED:",
@@ -165,13 +140,12 @@ export function TerminalInput() {
         ...prev,
         "> INITIATE",
         "",
-        selectedTier !== "free" ? "Processing payment..." : "Launching scan agents...",
+        paidTier ? "Processing payment..." : "Launching scan agents...",
       ])
       setIsLoading(true)
       setError("")
 
       try {
-        // Create scan first
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/scans/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -190,10 +164,10 @@ export function TerminalInput() {
         const data = await res.json()
         const scanId = data.id
 
-        if (selectedTier !== "free") {
-          // Create Stripe checkout session for pro/deep
+        if (paidTier) {
+          // Paid tier: redirect to Stripe checkout
           const payRes = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/checkout?tier=${selectedTier}`,
+            `${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/checkout?tier=${paidTier}`,
             { method: "POST" }
           )
           if (!payRes.ok) throw new Error("Failed to create payment session")
@@ -204,7 +178,7 @@ export function TerminalInput() {
           return
         }
 
-        // Free scan — go straight to scan page
+        // Free scan: go straight to scan page
         setLines(prev => [
           ...prev,
           "Agents deployed successfully.",
@@ -238,9 +212,7 @@ export function TerminalInput() {
     setStep("url")
     setUrl("")
     setEmail("")
-    setTierInput("")
     setConsentInput("")
-    setSelectedTier("free")
     setError("")
     setLines([
       "NULLSCAN v2.0.0 - Autonomous Penetration Testing",
@@ -255,7 +227,6 @@ export function TerminalInput() {
   const getInputValue = () => {
     if (step === "url") return url
     if (step === "email") return email
-    if (step === "tier") return tierInput
     if (step === "consent") return consentInput
     return ""
   }
@@ -264,12 +235,10 @@ export function TerminalInput() {
     const val = e.target.value
     if (step === "url") setUrl(val)
     else if (step === "email") setEmail(val)
-    else if (step === "tier") setTierInput(val)
     else if (step === "consent") setConsentInput(val)
   }
 
   const handleBlur = () => {
-    // Auto-format URL with https:// when user leaves the input
     if (step === "url" && url.trim() && !url.startsWith("http://") && !url.startsWith("https://")) {
       setUrl(`https://${url}`)
     }
@@ -376,7 +345,6 @@ export function TerminalInput() {
               placeholder={
                 step === "url" ? "example.com" :
                 step === "email" ? "you@email.com" :
-                step === "tier" ? "1, 2, or 3" :
                 step === "consent" ? "type 'confirm'" :
                 ""
               }
