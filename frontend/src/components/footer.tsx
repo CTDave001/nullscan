@@ -15,6 +15,13 @@ export function Footer() {
         </p>
         <nav aria-label="Footer navigation" className="flex items-center gap-4 sm:gap-6 font-mono text-[10px] uppercase tracking-wider">
           <Link
+            href="/blog"
+            className="py-2 transition-colors hover:text-[var(--cyan)]"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Blog
+          </Link>
+          <Link
             href="/free-website-security-scanner"
             className="py-2 transition-colors hover:text-[var(--cyan)]"
             style={{ color: "var(--text-muted)" }}

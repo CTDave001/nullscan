@@ -44,6 +44,10 @@ Nullscan is an automated security scanner that uses AI agents to perform real pe
 - https://nullscan.io/vibe-coding-security — Security for AI-built apps
 - https://nullscan.io/what-we-test — Detailed vulnerability coverage and testing methodology
 - https://nullscan.io/scope — Testing scope and methodology
+- https://nullscan.io/blog — Security research and insights blog
+- https://nullscan.io/blog/we-scanned-10-ai-built-apps — Research: scanning AI-built apps for vulnerabilities
+- https://nullscan.io/blog/common-vulnerabilities-vibe-coded-apps — Common vulnerabilities in vibe coded apps
+- https://nullscan.io/blog/why-ai-coding-tools-ignore-security — Why AI coding tools don't prioritize security
 
 ## Contact
 
