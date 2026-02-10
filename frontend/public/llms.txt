@@ -1,0 +1,50 @@
+# Nullscan
+
+> AI-powered penetration testing for web applications.
+
+Nullscan is an automated security scanner that uses AI agents to perform real penetration tests against web applications. It finds vulnerabilities like SQL injection, XSS, authentication bypass, SSRF, IDOR, path traversal, and more.
+
+## How It Works
+
+1. User provides a website URL
+2. AI agents deploy and run real attack simulations against the target
+3. A security report is generated with all vulnerabilities found, severity ratings, and affected endpoints
+
+## Key Features
+
+- Real penetration testing, not just header checks or signature matching
+- AI agents simulate actual attacker behavior
+- Tests for OWASP Top 10 vulnerability categories
+- Free scan available with no signup required
+- Paid tiers for detailed reproduction steps, PoC code, fix guidance, and PDF reports
+- Specifically designed for apps built with AI coding tools (Cursor, Lovable, Bolt, v0, Replit, etc.)
+
+## Pricing
+
+- Free: Quick scan with vulnerability titles, severity levels, and affected endpoints
+- Unlock ($39): Full report with reproduction steps, PoC code, and fix guidance for an existing scan
+- Pro ($250): Comprehensive scan with 300 iterations, 25 concurrent agents, detailed report
+- Deep Analysis ($899): Thorough scan with 500 iterations, 40 agents, executive summary, full coverage
+
+## Vulnerability Categories Tested
+
+- SQL Injection (OWASP A03:2021)
+- Cross-Site Scripting / XSS (OWASP A03:2021)
+- Authentication Bypass (OWASP A07:2021)
+- IDOR / Broken Access Control (OWASP A01:2021)
+- Server-Side Request Forgery / SSRF (OWASP A10:2021)
+- Path Traversal (OWASP A01:2021)
+- Rate Limiting (OWASP A07:2021)
+- Security Headers / Misconfiguration (OWASP A05:2021)
+
+## Pages
+
+- https://nullscan.io — Main landing page with free scan terminal
+- https://nullscan.io/free-website-security-scanner — Free vulnerability scanner
+- https://nullscan.io/vibe-coding-security — Security for AI-built apps
+- https://nullscan.io/what-we-test — Detailed vulnerability coverage and testing methodology
+- https://nullscan.io/scope — Testing scope and methodology
+
+## Contact
+
+Website: https://nullscan.io

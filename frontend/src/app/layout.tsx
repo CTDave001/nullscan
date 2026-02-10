@@ -60,6 +60,31 @@ export const metadata: Metadata = {
   ],
 };
 
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Nullscan",
+  url: "https://nullscan.io",
+  logo: "https://nullscan.io/favicon.svg",
+  description:
+    "AI-powered automated penetration testing for web applications. Find vulnerabilities before attackers do.",
+  sameAs: [],
+};
+
+const webSiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "Nullscan",
+  url: "https://nullscan.io",
+  description:
+    "AI-powered penetration testing for web apps. Free automated security scan — paste your URL, get results in minutes.",
+  potentialAction: {
+    "@type": "SearchAction",
+    target: "https://nullscan.io/?q={search_term_string}",
+    "query-input": "required name=search_term_string",
+  },
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -67,6 +92,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd) }}
+        />
+      </head>
       <body className="font-sans antialiased min-h-screen">
         {children}
       </body>
