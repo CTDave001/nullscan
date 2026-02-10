@@ -29,6 +29,25 @@ export const metadata: Metadata = {
   },
 }
 
+const breadcrumbJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://nullscan.io",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Free Website Security Scanner",
+      item: "https://nullscan.io/free-website-security-scanner",
+    },
+  ],
+}
+
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
@@ -96,6 +115,10 @@ const faqJsonLd = {
 export default function FreeSecurityScannerPage() {
   return (
     <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

@@ -28,6 +28,25 @@ export const metadata: Metadata = {
   },
 }
 
+const breadcrumbJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://nullscan.io",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "What We Test",
+      item: "https://nullscan.io/what-we-test",
+    },
+  ],
+}
+
 const faqJsonLd = {
   "@context": "https://schema.org",
   "@type": "FAQPage",
@@ -186,6 +205,10 @@ const VULNERABILITIES = [
 export default function WhatWeTestPage() {
   return (
     <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}

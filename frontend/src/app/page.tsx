@@ -38,8 +38,51 @@ export default function LandingPage() {
     }
   }
 
+  const pricingJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "Nullscan",
+    url: "https://nullscan.io",
+    applicationCategory: "SecurityApplication",
+    operatingSystem: "Web",
+    offers: [
+      {
+        "@type": "Offer",
+        name: "Free Scan",
+        price: "0",
+        priceCurrency: "USD",
+        description: "Quick external scan with finding titles, severity levels, and affected endpoints",
+      },
+      {
+        "@type": "Offer",
+        name: "Unlock Report",
+        price: "39",
+        priceCurrency: "USD",
+        description: "Full report with reproduction steps, proof-of-concept code, fix guidance, and PDF export",
+      },
+      {
+        "@type": "Offer",
+        name: "Pro Scan",
+        price: "250",
+        priceCurrency: "USD",
+        description: "Comprehensive 300-iteration scan with more attack vectors and detailed report",
+      },
+      {
+        "@type": "Offer",
+        name: "Deep Analysis",
+        price: "899",
+        priceCurrency: "USD",
+        description: "Thorough 500-iteration security audit with full attack coverage and executive summary",
+      },
+    ],
+  }
+
   return (
     <div className="min-h-screen relative">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingJsonLd) }}
+      />
       <StatusBar />
       <GridOverlay />
       <CornerMarkers />
@@ -61,7 +104,7 @@ export default function LandingPage() {
                     color: "var(--text-muted)"
                   }}
                 >
-                  <div className="w-1.5 h-1.5 2xl:w-2 2xl:h-2 rounded-full animate-status-pulse" style={{ backgroundColor: "var(--online)" }} />
+                  <div className="w-1.5 h-1.5 2xl:w-2 2xl:h-2 rounded-full animate-status-pulse" style={{ backgroundColor: "var(--online)" }} aria-hidden="true" />
                   Autonomous Security Testing
                 </div>
 
@@ -86,10 +129,11 @@ export default function LandingPage() {
                   <p className="font-mono text-[10px] 2xl:text-xs uppercase tracking-wider mb-4" style={{ color: "var(--text-dim)" }}>
                     Attack Vectors
                   </p>
-                  <div className="flex flex-nowrap overflow-x-auto snap-x gap-2 pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 2xl:gap-3 scrollbar-none">
+                  <div className="flex flex-nowrap overflow-x-auto snap-x gap-2 pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0 2xl:gap-3 scrollbar-none" role="list" aria-label="Attack vectors tested">
                     {ATTACK_VECTORS.map((vector) => (
                       <span
                         key={vector}
+                        role="listitem"
                         className="shrink-0 snap-center px-2.5 py-1 2xl:px-3 2xl:py-1.5 font-mono text-[11px] 2xl:text-xs rounded-[var(--radius-sm)] transition-colors hover:border-[var(--cyan)]"
                         style={{
                           backgroundColor: "var(--surface)",
@@ -393,6 +437,59 @@ export default function LandingPage() {
             >
               No credit card required for free scans. All scans are one-time purchases.
             </p>
+          </div>
+        </section>
+
+        {/* SEO Internal Links */}
+        <section className="py-12 sm:py-16 px-4 sm:px-6 border-t" style={{ borderColor: "var(--border)" }}>
+          <div className="max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <a
+                href="/free-website-security-scanner"
+                className="group p-5 rounded-[var(--radius)] transition-all hover:border-[var(--cyan)]"
+                style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}
+              >
+                <p className="font-mono text-[10px] uppercase tracking-wider mb-2" style={{ color: "var(--cyan)" }}>
+                  Free Tool
+                </p>
+                <h3 className="font-semibold text-sm mb-2" style={{ color: "var(--text)" }}>
+                  Free Website Security Scanner
+                </h3>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  Scan your website for vulnerabilities in minutes. No signup, no setup.
+                </p>
+              </a>
+              <a
+                href="/vibe-coding-security"
+                className="group p-5 rounded-[var(--radius)] transition-all hover:border-[var(--cyan)]"
+                style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}
+              >
+                <p className="font-mono text-[10px] uppercase tracking-wider mb-2" style={{ color: "var(--high)" }}>
+                  AI Security
+                </p>
+                <h3 className="font-semibold text-sm mb-2" style={{ color: "var(--text)" }}>
+                  Security for AI-Built Apps
+                </h3>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  Built with Cursor, Lovable, or Bolt? Your app probably has vulnerabilities.
+                </p>
+              </a>
+              <a
+                href="/what-we-test"
+                className="group p-5 rounded-[var(--radius)] transition-all hover:border-[var(--cyan)]"
+                style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}
+              >
+                <p className="font-mono text-[10px] uppercase tracking-wider mb-2" style={{ color: "var(--cyan)" }}>
+                  Coverage
+                </p>
+                <h3 className="font-semibold text-sm mb-2" style={{ color: "var(--text)" }}>
+                  What We Test
+                </h3>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  OWASP Top 10 coverage — SQL injection, XSS, auth bypass, SSRF, and more.
+                </p>
+              </a>
+            </div>
           </div>
         </section>
 

@@ -333,7 +333,14 @@ export function TerminalInput({ paidTier = null }: TerminalInputProps) {
             }}
           >
             <span style={{ color: "var(--cyan)" }}>{">"}</span>
+            <label htmlFor="nullscan-input" className="sr-only">
+              {step === "url" ? "Enter target URL" :
+               step === "email" ? "Enter your email address" :
+               step === "consent" ? "Type confirm to authorize scan" :
+               "Input"}
+            </label>
             <input
+              id="nullscan-input"
               ref={inputRef}
               type={step === "email" ? "email" : "text"}
               value={getInputValue()}

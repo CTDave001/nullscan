@@ -29,6 +29,25 @@ export const metadata: Metadata = {
   },
 }
 
+const breadcrumbJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://nullscan.io",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Security for AI-Built Apps",
+      item: "https://nullscan.io/vibe-coding-security",
+    },
+  ],
+}
+
 const faqJsonLd = {
   "@context": "https://schema.org",
   "@type": "FAQPage",
@@ -89,6 +108,10 @@ const articleJsonLd = {
 export default function VibeCodingSecurityPage() {
   return (
     <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}

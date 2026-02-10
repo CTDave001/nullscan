@@ -13,7 +13,21 @@ export function Footer() {
         >
           NULLSCAN 2026
         </p>
-        <div className="flex items-center gap-4 sm:gap-6 font-mono text-[10px] uppercase tracking-wider">
+        <nav aria-label="Footer navigation" className="flex items-center gap-4 sm:gap-6 font-mono text-[10px] uppercase tracking-wider">
+          <Link
+            href="/free-website-security-scanner"
+            className="py-2 transition-colors hover:text-[var(--cyan)]"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Free Scanner
+          </Link>
+          <Link
+            href="/what-we-test"
+            className="py-2 transition-colors hover:text-[var(--cyan)]"
+            style={{ color: "var(--text-muted)" }}
+          >
+            What We Test
+          </Link>
           <Link
             href="/scope"
             className="py-2 transition-colors hover:text-[var(--cyan)]"
@@ -35,7 +49,7 @@ export function Footer() {
           >
             Privacy
           </Link>
-        </div>
+        </nav>
       </div>
     </footer>
   )
