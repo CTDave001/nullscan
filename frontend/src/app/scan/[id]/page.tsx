@@ -537,7 +537,7 @@ export default function ScanStatusPage() {
             className="lg:col-span-3 border-r p-6 space-y-6"
             style={{ borderColor: "var(--border)" }}
           >
-            <StatusPanel />
+            {StatusPanel()}
           </div>
 
           {/* Center Panel - Activity Log */}
@@ -545,20 +545,20 @@ export default function ScanStatusPage() {
             className="lg:col-span-6 border-r flex flex-col"
             style={{ borderColor: "var(--border)" }}
           >
-            <LogPanel heightClass="h-[calc(100vh-8rem-41px)]" />
+            {LogPanel({ heightClass: "h-[calc(100vh-8rem-41px)]" })}
           </div>
 
           {/* Right Panel - Findings */}
           <div className="lg:col-span-3 flex flex-col">
-            <FindingsPanel />
+            {FindingsPanel()}
           </div>
         </div>
 
         {/* Mobile: tab-based single panel view */}
         <div className="lg:hidden pb-16">
-          {activeTab === "status" && <StatusPanel />}
-          {activeTab === "log" && <LogPanel heightClass="h-[calc(100dvh-8rem-56px)]" />}
-          {activeTab === "findings" && <FindingsPanel />}
+          {activeTab === "status" && {StatusPanel()}}
+          {activeTab === "log" && {LogPanel({ heightClass: "h-[calc(100dvh-8rem-56px)]" })}}
+          {activeTab === "findings" && {FindingsPanel()}}
         </div>
       </main>
 
