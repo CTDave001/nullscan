@@ -70,6 +70,7 @@ export default function ScanStatusPage() {
   const [activeTab, setActiveTab] = useState<ScanTab>("log")
   const activityRef = useRef<HTMLDivElement>(null)
   const userScrolledUp = useRef(false)
+  const routerRef = useRef(router)
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60)
@@ -152,14 +153,14 @@ export default function ScanStatusPage() {
       }
 
       if (scanData.status === "completed") {
-        setTimeout(() => router.push(`/results/${scanId}`), 2000)
+        setTimeout(() => routerRef.current.push(`/results/${scanId}`), 2000)
       } else if (scanData.status === "failed") {
         setError("Scan failed. Please try again.")
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
     }
-  }, [scanId, router])
+  }, [scanId])
 
   useEffect(() => {
     fetchData()
