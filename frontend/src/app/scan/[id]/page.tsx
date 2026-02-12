@@ -57,6 +57,28 @@ interface Progress {
   current_phase?: string
 }
 
+function ElapsedTimer({ createdAt }: { createdAt?: string }) {
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (!createdAt) return
+    const raw = createdAt.endsWith("Z") ? createdAt : createdAt + "Z"
+    const start = new Date(raw).getTime()
+    const update = () => setElapsed(Math.floor((Date.now() - start) / 1000))
+    update()
+    const tick = setInterval(update, 1000)
+    return () => clearInterval(tick)
+  }, [createdAt])
+
+  const m = Math.floor(elapsed / 60)
+  const sec = elapsed % 60
+  return (
+    <span style={{ color: "var(--cyan)" }}>
+      {String(m).padStart(2, "0")}:{String(sec).padStart(2, "0")}
+    </span>
+  )
+}
+
 export default function ScanStatusPage() {
   const params = useParams()
   const router = useRouter()
@@ -65,18 +87,11 @@ export default function ScanStatusPage() {
   const [scan, setScan] = useState<Scan | null>(null)
   const [progress, setProgress] = useState<Progress>({})
   const [error, setError] = useState("")
-  const [elapsed, setElapsed] = useState(0)
   const [maxTokens, setMaxTokens] = useState(0)
   const [activeTab, setActiveTab] = useState<ScanTab>("log")
   const activityRef = useRef<HTMLDivElement>(null)
   const userScrolledUp = useRef(false)
   const routerRef = useRef(router)
-
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60)
-    const sec = s % 60
-    return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
-  }
 
   const formatBigNumber = (n: number) => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
@@ -105,17 +120,6 @@ export default function ScanStatusPage() {
     }
     return colors[severity.toLowerCase()] || "var(--text-muted)"
   }
-
-  // Elapsed time counter
-  useEffect(() => {
-    if (!scan?.created_at) return
-    const raw = scan.created_at.endsWith("Z") ? scan.created_at : scan.created_at + "Z"
-    const createdAt = new Date(raw).getTime()
-    const update = () => setElapsed(Math.floor((Date.now() - createdAt) / 1000))
-    update()
-    const tick = setInterval(update, 1000)
-    return () => clearInterval(tick)
-  }, [scan?.created_at])
 
   // Auto-scroll activity log (freeze when user scrolls up, resume at bottom)
   useEffect(() => {
@@ -526,7 +530,7 @@ export default function ScanStatusPage() {
             <span className="sm:hidden" style={{ color: "var(--text-dim)" }}>
               {scanId.slice(0, 4)}
             </span>
-            <span style={{ color: "var(--cyan)" }}>{formatTime(elapsed)}</span>
+            <ElapsedTimer createdAt={scan?.created_at} />
           </div>
         </div>
 
