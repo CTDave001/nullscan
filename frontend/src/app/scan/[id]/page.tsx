@@ -560,9 +560,9 @@ export default function ScanStatusPage() {
 
         {/* Mobile: tab-based single panel view */}
         <div className="lg:hidden pb-16">
-          {activeTab === "status" && {StatusPanel()}}
-          {activeTab === "log" && {LogPanel({ heightClass: "h-[calc(100dvh-8rem-56px)]" })}}
-          {activeTab === "findings" && {FindingsPanel()}}
+          {activeTab === "status" && StatusPanel()}
+          {activeTab === "log" && LogPanel({ heightClass: "h-[calc(100dvh-8rem-56px)]" })}
+          {activeTab === "findings" && FindingsPanel()}
         </div>
       </main>
 
