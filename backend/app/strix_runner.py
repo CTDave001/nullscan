@@ -838,6 +838,64 @@ async def run_strix_scan_async(
                 except Exception as e:
                     print(f"[strix] Warning: Fallback report creation failed: {e}", flush=True)
 
+        # Enrich scan_stats with real data from tracer (GPT guesses poorly from synthesized reports)
+        if structured_report and "scan_stats" in structured_report:
+            try:
+                stats = structured_report["scan_stats"]
+                real_tool_count = tracer.get_real_tool_count()
+
+                # Count unique endpoints from tool executions
+                unique_endpoints = set()
+                http_request_count = 0
+                for exec_data in tracer.tool_executions.values():
+                    tool_name = exec_data.get("tool_name", "")
+                    args = exec_data.get("args", {})
+                    if tool_name == "send_request":
+                        http_request_count += 1
+                        url = args.get("url", "")
+                        if url:
+                            unique_endpoints.add(url.split("?")[0])
+                    elif tool_name == "browser_action" and args.get("action") == "goto":
+                        http_request_count += 1
+                        url = args.get("url", "")
+                        if url:
+                            unique_endpoints.add(url.split("?")[0])
+                    elif tool_name == "terminal_execute":
+                        cmd = args.get("command", "").lower()
+                        if any(x in cmd for x in ["curl", "wget", "httpx", "nuclei", "nikto", "sqlmap", "ffuf"]):
+                            http_request_count += 1
+
+                # Use real values, keeping GPT's if ours are lower (GPT may count from report content)
+                real_endpoints = len(unique_endpoints)
+                if real_endpoints > stats.get("endpoints_tested", 0):
+                    stats["endpoints_tested"] = real_endpoints
+                if real_endpoints > stats.get("endpoints_discovered", 0):
+                    stats["endpoints_discovered"] = real_endpoints
+
+                # requests_sent: use tool count as minimum (each tool call ~ 1+ request)
+                real_requests = max(http_request_count, real_tool_count)
+                if real_requests > stats.get("requests_sent", 0):
+                    stats["requests_sent"] = real_requests
+
+                # Duration from tracer timestamps
+                try:
+                    from datetime import datetime, timezone
+                    start = datetime.fromisoformat(tracer.start_time.replace("Z", "+00:00"))
+                    end = datetime.now(timezone.utc)
+                    duration_min = max(1, int((end - start).total_seconds() / 60))
+                    if duration_min > stats.get("duration_minutes", 0):
+                        stats["duration_minutes"] = duration_min
+                except Exception:
+                    pass
+
+                # Technologies: ensure non-zero
+                if stats.get("technologies_identified", 0) == 0:
+                    stats["technologies_identified"] = max(1, len(structured_report.get("attack_surface", {}).get("technologies", [])))
+
+                print(f"[strix] Enriched scan_stats: endpoints={stats['endpoints_tested']}, requests={stats['requests_sent']}, duration={stats['duration_minutes']}min", flush=True)
+            except Exception as e:
+                print(f"[strix] Warning: Failed to enrich scan_stats: {e}", flush=True)
+
         tracer.cleanup()
         cleanup_runtime()
 
