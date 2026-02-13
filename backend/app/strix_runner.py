@@ -486,6 +486,22 @@ async def run_strix_scan_async(
         _max_cost_seen.pop(scan_id, None)
         _max_tokens_seen.pop(scan_id, None)
 
+        # CRITICAL: Clear stale module-level state from previous scans.
+        # _agent_instances/_agent_graph persist between scans, causing
+        # get_total_llm_stats() to return the PREVIOUS scan's cost,
+        # which immediately triggers the cost limit on the new scan.
+        try:
+            from strix.tools.agents_graph import agents_graph_actions as aga
+            aga._agent_graph = {"nodes": {}, "edges": []}
+            aga._agent_instances = {}
+            aga._agent_states = {}
+            aga._agent_messages = {}
+            aga._running_agents = {}
+            aga._root_agent_id = None
+            print(f"[strix] Cleared stale agent graph state", flush=True)
+        except Exception as e:
+            print(f"[strix] Warning: Could not clear agent graph state: {e}", flush=True)
+
         print(f"[strix] Starting {scan_mode} scan for {target_url} (max {max_iterations} iters, {max_agents} agents, {wait_timeout}s timeout)")
 
         # Build target info (same as Strix CLI)
