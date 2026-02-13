@@ -542,6 +542,18 @@ async def run_strix_scan_async(
         if isinstance(result, dict):
             print(f"[strix] result success={result.get('success', 'not set')}, error={result.get('error', 'none')}", flush=True)
 
+        # Log tracer state immediately
+        print(f"[strix] Tracer state: final_scan_result={'set' if tracer.final_scan_result else 'None'}, "
+              f"vulnerability_reports={len(tracer.vulnerability_reports)}, agents={len(tracer.agents)}", flush=True)
+
+        # CRITICAL: Flush tracer data to disk BEFORE parsing run directory.
+        # If the agent hit max_iterations without calling finish_scan, vulnerability
+        # data may be in memory but not yet written to disk.
+        try:
+            tracer.save_run_data()
+        except Exception as e:
+            print(f"[strix] WARNING: Failed to flush tracer data to disk: {e}", flush=True)
+
         # Check for scan errors
         if isinstance(result, dict) and not result.get("success", True):
             error_msg = result.get("error", "Unknown error")
@@ -568,12 +580,33 @@ async def run_strix_scan_async(
                 "findings": [],
             }
 
-        # Parse results from output directory
+        # Parse results from output directory (files should exist now after flush)
         findings = parse_strix_run_dir(run_name)
         print(f"[strix] File-based findings: {len(findings)}", flush=True)
         print(f"[strix] Callback vulnerabilities: {len(vulnerabilities)}", flush=True)
+        print(f"[strix] Tracer in-memory vulnerability_reports: {len(tracer.vulnerability_reports)}", flush=True)
 
-        # Always include callback vulnerabilities (merge with file-based findings)
+        # Also read directly from tracer memory (in case disk writes failed silently)
+        if tracer.vulnerability_reports:
+            tracer_findings = [
+                {
+                    "title": v.get("title", "Unknown"),
+                    "severity": normalize_severity(v.get("severity", "medium")),
+                    "endpoint": v.get("endpoint", ""),
+                    "impact": v.get("impact", v.get("description", "")),
+                    "reproduction_steps": v.get("technical_analysis", ""),
+                    "poc": v.get("poc_script_code", v.get("poc_description", "")),
+                    "fix_guidance": v.get("remediation_steps", ""),
+                }
+                for v in tracer.vulnerability_reports
+            ]
+            existing_titles = {f.get("title", "").lower() for f in findings}
+            for tf in tracer_findings:
+                if tf["title"].lower() not in existing_titles:
+                    findings.append(tf)
+            print(f"[strix] After tracer merge: {len(findings)}", flush=True)
+
+        # Also include callback vulnerabilities (merge with existing findings)
         if vulnerabilities:
             callback_findings = [
                 {
@@ -587,7 +620,6 @@ async def run_strix_scan_async(
                 }
                 for v in vulnerabilities
             ]
-            # Merge: add callback findings that aren't already in file-based findings (by title)
             existing_titles = {f.get("title", "").lower() for f in findings}
             for cf in callback_findings:
                 if cf["title"].lower() not in existing_titles:
@@ -684,31 +716,59 @@ async def run_strix_scan_async(
                 print(f"[strix] Warning: Failed to recover from progress: {e}", flush=True)
 
         # ROOT FIX: If the agent never called finish_scan, the report file won't exist.
-        # Synthesize it from vulnerability files so tracer.save_run_data() writes it.
+        # Synthesize it from available data (tracer memory, disk files, or parsed findings).
         run_dir = Path(f"strix_runs/{run_name}")
-        if tracer.final_scan_result is None and run_dir.exists():
+        if tracer.final_scan_result is None:
             print(f"[strix] Agent did not call finish_scan — synthesizing report", flush=True)
-            vuln_dir = run_dir / "vulnerabilities"
-            vuln_md_files = sorted(vuln_dir.glob("*.md")) if vuln_dir.exists() else []
-            if vuln_md_files:
-                vuln_contents = []
-                for vf in vuln_md_files:
-                    try:
-                        vuln_contents.append(vf.read_text(encoding="utf-8"))
-                    except Exception:
-                        pass
-                if vuln_contents:
-                    combined = "\n\n---\n\n".join(vuln_contents)
-                    tracer.final_scan_result = (
-                        f"# Executive Summary\n\n"
-                        f"Security assessment of {target_url} identified {len(vuln_contents)} potential vulnerability(ies).\n\n"
-                        f"# Technical Analysis\n\n{combined}\n\n"
-                        f"# Recommendations\n\nReview and remediate the identified findings based on severity.\n"
-                    )
-                    tracer.save_run_data(mark_complete=True)
-                    print(f"[strix] Synthesized report written from {len(vuln_contents)} vulnerability files", flush=True)
-            elif findings:
-                # No vuln files but we have parsed findings — build from those
+
+            # Source 1: tracer in-memory vulnerability reports (most reliable)
+            if tracer.vulnerability_reports:
+                parts = []
+                for v in tracer.vulnerability_reports:
+                    part = f"## {v.get('title', 'Unknown')}\n**Severity:** {v.get('severity', 'unknown').upper()}"
+                    if v.get('endpoint'):
+                        part += f"\n**Endpoint:** {v['endpoint']}"
+                    if v.get('description'):
+                        part += f"\n\n{v['description']}"
+                    if v.get('technical_analysis'):
+                        part += f"\n\n### Technical Analysis\n{v['technical_analysis']}"
+                    if v.get('remediation_steps'):
+                        part += f"\n\n### Remediation\n{v['remediation_steps']}"
+                    parts.append(part)
+                combined = "\n\n---\n\n".join(parts)
+                tracer.final_scan_result = (
+                    f"# Executive Summary\n\n"
+                    f"Security assessment of {target_url} identified {len(tracer.vulnerability_reports)} potential vulnerability(ies).\n\n"
+                    f"# Technical Analysis\n\n{combined}\n\n"
+                    f"# Recommendations\n\nReview and remediate the identified findings based on severity.\n"
+                )
+                tracer.save_run_data(mark_complete=True)
+                print(f"[strix] Synthesized report from {len(tracer.vulnerability_reports)} tracer in-memory vulns", flush=True)
+
+            # Source 2: vulnerability files on disk
+            elif run_dir.exists():
+                vuln_dir = run_dir / "vulnerabilities"
+                vuln_md_files = sorted(vuln_dir.glob("*.md")) if vuln_dir.exists() else []
+                if vuln_md_files:
+                    vuln_contents = []
+                    for vf in vuln_md_files:
+                        try:
+                            vuln_contents.append(vf.read_text(encoding="utf-8"))
+                        except Exception:
+                            pass
+                    if vuln_contents:
+                        combined = "\n\n---\n\n".join(vuln_contents)
+                        tracer.final_scan_result = (
+                            f"# Executive Summary\n\n"
+                            f"Security assessment of {target_url} identified {len(vuln_contents)} potential vulnerability(ies).\n\n"
+                            f"# Technical Analysis\n\n{combined}\n\n"
+                            f"# Recommendations\n\nReview and remediate the identified findings based on severity.\n"
+                        )
+                        tracer.save_run_data(mark_complete=True)
+                        print(f"[strix] Synthesized report from {len(vuln_contents)} disk vuln files", flush=True)
+
+            # Source 3: parsed findings from any source
+            if tracer.final_scan_result is None and findings:
                 parts = []
                 for i, f in enumerate(findings, 1):
                     parts.append(f"## {i}. {f.get('title', 'Unknown')}\n**Severity:** {f.get('severity', 'Medium')}")
@@ -723,7 +783,7 @@ async def run_strix_scan_async(
                     f"# Recommendations\n\nReview and remediate the identified findings based on severity.\n"
                 )
                 tracer.save_run_data(mark_complete=True)
-                print(f"[strix] Synthesized report written from {len(findings)} parsed findings", flush=True)
+                print(f"[strix] Synthesized report from {len(findings)} parsed findings", flush=True)
 
         # Process markdown report for structured output
         structured_report = None
@@ -748,7 +808,7 @@ async def run_strix_scan_async(
                 print(f"[strix] Warning: Report processing failed: {e}", flush=True)
         else:
             print(f"[strix] WARNING: No penetration_test_report.md found even after synthesis", flush=True)
-            # Last resort: try any .md in the run dir
+            # Try any .md in the run dir
             if run_dir.exists():
                 md_files = list(run_dir.glob("*.md"))
                 if md_files:
@@ -760,6 +820,23 @@ async def run_strix_scan_async(
                             structured_report = process_scan_report(alt_content, target_url)
                     except Exception as e:
                         print(f"[strix] Warning: Alt report processing failed: {e}", flush=True)
+
+            # Last resort: if we have findings but no structured report, build from synthesized report in memory
+            if not structured_report and tracer.final_scan_result:
+                try:
+                    print(f"[strix] Building structured report from in-memory synthesis ({len(tracer.final_scan_result)} chars)", flush=True)
+                    structured_report = process_scan_report(tracer.final_scan_result, target_url)
+                except Exception as e:
+                    print(f"[strix] Warning: In-memory report processing failed: {e}", flush=True)
+
+            # Ultimate fallback: create minimal structured report from findings
+            if not structured_report and findings:
+                try:
+                    from app.report_processor import create_fallback_report
+                    print(f"[strix] Creating fallback structured report from {len(findings)} findings", flush=True)
+                    structured_report = create_fallback_report(target_url, f"Found {len(findings)} potential issue(s)")
+                except Exception as e:
+                    print(f"[strix] Warning: Fallback report creation failed: {e}", flush=True)
 
         tracer.cleanup()
         cleanup_runtime()
