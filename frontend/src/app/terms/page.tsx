@@ -9,6 +9,12 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://nullscan.io/terms",
   },
+  openGraph: {
+    title: "Terms of Service | Nullscan",
+    description:
+      "Terms of service for Nullscan. Authorization requirements, liability, and usage policies for our security scanning service.",
+    url: "https://nullscan.io/terms",
+  },
 };
 
 export default function TermsPage() {

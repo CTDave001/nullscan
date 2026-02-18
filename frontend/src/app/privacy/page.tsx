@@ -5,9 +5,15 @@ import { Footer } from "@/components/footer";
 export const metadata: Metadata = {
   title: "Privacy Policy | Nullscan",
   description:
-    "Nullscan privacy policy. What data we collect, how we use it, and how we protect your information.",
+    "Nullscan privacy policy — what data we collect during security scans, how we use it, how long we retain it, and how we protect your information.",
   alternates: {
     canonical: "https://nullscan.io/privacy",
+  },
+  openGraph: {
+    title: "Privacy Policy | Nullscan",
+    description:
+      "Nullscan privacy policy — what data we collect during security scans, how we use it, how long we retain it, and how we protect your information.",
+    url: "https://nullscan.io/privacy",
   },
 };
 

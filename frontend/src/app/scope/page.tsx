@@ -9,6 +9,12 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://nullscan.io/scope",
   },
+  openGraph: {
+    title: "Testing Scope | Nullscan",
+    description:
+      "What Nullscan tests and doesn't test. We scan public URLs for common vulnerabilities with non-destructive proof-of-concept validation.",
+    url: "https://nullscan.io/scope",
+  },
 };
 
 export default function ScopePage() {
