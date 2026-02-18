@@ -7,6 +7,8 @@ import { TerminalInput } from "@/components/terminal-input"
 import { blogPosts, getPostBySlug, getAllSlugs } from "@/lib/blog"
 import { ArrowLeft, ArrowRight } from "lucide-react"
 
+export const revalidate = 86400
+
 interface Props {
   params: Promise<{ slug: string }>
 }
@@ -208,6 +210,18 @@ export default async function BlogPostPage({ params }: Props) {
                     </li>
                   ))}
                 </ul>
+              )}
+              {section.code && (
+                <pre
+                  className="rounded-lg p-4 mb-4 overflow-x-auto text-xs sm:text-sm leading-relaxed font-mono"
+                  style={{
+                    backgroundColor: "var(--bg)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  <code>{section.code}</code>
+                </pre>
               )}
             </section>
           ))}

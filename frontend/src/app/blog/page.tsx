@@ -5,6 +5,8 @@ import { Footer } from "@/components/footer"
 import { blogPosts } from "@/lib/blog"
 import { ArrowRight } from "lucide-react"
 
+export const revalidate = 86400
+
 export const metadata: Metadata = {
   title: "Blog — Security Insights for AI-Built Apps | Nullscan",
   description:
