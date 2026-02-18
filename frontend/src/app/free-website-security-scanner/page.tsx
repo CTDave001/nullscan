@@ -5,9 +5,9 @@ import { TerminalInput } from "@/components/terminal-input"
 import { Shield, Zap, Lock, Globe, Server, AlertTriangle, CheckCircle, ArrowRight } from "lucide-react"
 
 export const metadata: Metadata = {
-  title: "Free Website Security Scanner | Nullscan — AI-Powered Vulnerability Testing",
+  title: "Free Website Security Scanner | Nullscan",
   description:
-    "Scan your website for vulnerabilities for free. Nullscan uses AI agents to run real penetration tests — SQL injection, XSS, auth bypass, SSRF, and more. No signup, results in minutes.",
+    "Scan your website for vulnerabilities for free. AI-powered penetration tests for SQL injection, XSS, auth bypass, SSRF, and more. Results in minutes.",
   alternates: {
     canonical: "https://nullscan.io/free-website-security-scanner",
   },

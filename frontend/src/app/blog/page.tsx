@@ -8,7 +8,7 @@ import { ArrowRight } from "lucide-react"
 export const metadata: Metadata = {
   title: "Blog — Security Insights for AI-Built Apps | Nullscan",
   description:
-    "Security research, vulnerability analysis, and practical advice for developers building with AI coding tools. Learn how to find and fix security issues in vibe coded apps.",
+    "Security research and practical advice for developers building with AI tools. Learn to find and fix vulnerabilities in vibe coded apps.",
   alternates: {
     canonical: "https://nullscan.io/blog",
   },

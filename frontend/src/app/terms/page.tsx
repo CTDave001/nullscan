@@ -1,5 +1,15 @@
+import type { Metadata } from "next";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
+
+export const metadata: Metadata = {
+  title: "Terms of Service | Nullscan",
+  description:
+    "Terms of service for Nullscan. Authorization requirements, liability, and usage policies for our security scanning service.",
+  alternates: {
+    canonical: "https://nullscan.io/terms",
+  },
+};
 
 export default function TermsPage() {
   return (

@@ -5,9 +5,9 @@ import { TerminalInput } from "@/components/terminal-input"
 import { Shield, AlertTriangle, Code, Zap, ArrowRight, Lock, CheckCircle } from "lucide-react"
 
 export const metadata: Metadata = {
-  title: "Security for AI-Built Apps | Vibe Coding Security Scanner — Nullscan",
+  title: "Vibe Coding Security Scanner | Nullscan",
   description:
-    "Built your app with AI? It probably has security vulnerabilities. Nullscan scans apps built with Cursor, Lovable, Bolt, v0, and other AI tools for SQL injection, XSS, auth bypass, and more. Free scan.",
+    "Built your app with AI? It probably has vulnerabilities. Scan apps built with Cursor, Lovable, Bolt, v0, and other AI tools for security issues. Free.",
   alternates: {
     canonical: "https://nullscan.io/vibe-coding-security",
   },

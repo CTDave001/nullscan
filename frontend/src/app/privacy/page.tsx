@@ -1,5 +1,15 @@
+import type { Metadata } from "next";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy | Nullscan",
+  description:
+    "Nullscan privacy policy. What data we collect, how we use it, and how we protect your information.",
+  alternates: {
+    canonical: "https://nullscan.io/privacy",
+  },
+};
 
 export default function PrivacyPage() {
   return (

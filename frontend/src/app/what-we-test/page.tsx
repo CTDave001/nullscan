@@ -6,7 +6,7 @@ import { ArrowRight, Shield, AlertTriangle, Lock, Globe, Server, Zap, Code, Chec
 export const metadata: Metadata = {
   title: "What We Test — OWASP Top 10 Vulnerability Scanner | Nullscan",
   description:
-    "Nullscan tests for SQL injection, XSS, authentication bypass, SSRF, IDOR, path traversal, rate limiting, and security headers. Full OWASP Top 10 coverage with AI-powered penetration testing.",
+    "SQL injection, XSS, auth bypass, SSRF, IDOR, path traversal, rate limiting, and security headers. OWASP Top 10 coverage with AI pentesting.",
   alternates: {
     canonical: "https://nullscan.io/what-we-test",
   },

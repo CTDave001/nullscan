@@ -20,7 +20,7 @@ export const blogPosts: BlogPost[] = [
     slug: "we-scanned-10-ai-built-apps",
     title: "We Scanned 10 AI-Built Apps — Here's What We Found",
     description:
-      "We ran automated penetration tests against 10 web apps built with AI coding tools. Every single one had at least one vulnerability. Here are the most common issues.",
+      "We pentested 10 web apps built with AI coding tools. Every single one had at least one vulnerability. Here are the most common issues.",
     date: "2026-02-10",
     readingTime: "5 min read",
     category: "Research",

@@ -26,6 +26,9 @@ export const metadata: Metadata = {
     icon: "/favicon.svg",
   },
   metadataBase: new URL("https://nullscan.io"),
+  alternates: {
+    canonical: "https://nullscan.io",
+  },
   openGraph: {
     title: "Nullscan - Find Vulnerabilities Before Attackers Do",
     description:

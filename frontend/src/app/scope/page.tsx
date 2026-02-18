@@ -1,5 +1,15 @@
+import type { Metadata } from "next";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
+
+export const metadata: Metadata = {
+  title: "Testing Scope | Nullscan",
+  description:
+    "What Nullscan tests and doesn't test. We scan public URLs for common vulnerabilities with non-destructive proof-of-concept validation.",
+  alternates: {
+    canonical: "https://nullscan.io/scope",
+  },
+};
 
 export default function ScopePage() {
   return (
