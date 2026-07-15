@@ -4,7 +4,7 @@
 
 Nullscan is a SaaS that performs automated black-box penetration testing on web applications. A user submits a URL, and AI-powered agents scan it for real vulnerabilities — SQL injection, XSS, SSRF, auth bypass, IDOR, directory traversal, and more. Users watch the scan happen in real-time, then receive a professional pentest report with verified findings, proof-of-concept code, and fix guidance.
 
-The free tier shows finding titles, severity, and affected endpoints. Paid tiers ($149 / $399) unlock reproduction steps, PoC code, and detailed remediation.
+The free tier shows finding titles, severity, and affected endpoints. Paid tiers unlock reproduction steps, PoC code, and detailed remediation. There are three paid tiers: **Unlock Report ($39)** reveals the full report for the quick scan the user already ran; **Pro Scan ($250)** and **Deep Analysis ($899)** additionally launch a new, deeper scan (300 and 500 agent iterations respectively).
 
 ---
 
@@ -124,7 +124,7 @@ Create a new scan.
   "email": "user@example.com",
   "target_url": "https://example.com",
   "status": "pending",
-  "scan_type": "deep",
+  "scan_type": "quick",
   "created_at": "2026-02-04T12:00:00"
 }
 ```
@@ -145,10 +145,11 @@ Get scan metadata.
   "email": "user@example.com",
   "target_url": "https://example.com",
   "status": "pending" | "running" | "completed" | "failed",
-  "scan_type": "quick" | "deep",
+  "scan_type": "quick" | "pro" | "deep",
   "created_at": "2026-02-04T12:00:00",
   "completed_at": "2026-02-04T12:15:00" | null,
-  "paid_tier": null | "unlock" | "deep"
+  "paid_tier": null | "unlock" | "pro" | "deep",
+  "parent_scan_id": null | "uuid"
 }
 ```
 
@@ -213,7 +214,7 @@ Get scan results. Only available when status is "completed".
   "risk_level": "High" | "Medium" | "Low" | "Clean",
   "scan_type": "deep",
   "completed_at": "2026-02-04T12:15:00",
-  "paid_tier": null | "unlock" | "deep",
+  "paid_tier": null | "unlock" | "pro" | "deep",
   "findings": [
     {
       "title": "SQL Injection in login endpoint",
@@ -231,8 +232,8 @@ Get scan results. Only available when status is "completed".
 Free tier: `title`, `severity`, `endpoint`, `impact` are visible. `reproduction_steps`, `poc`, `fix_guidance` are `null`.
 Paid tier: all fields populated.
 
-#### `POST /scans/{scan_id}/checkout?tier=unlock|deep`
-Create a Stripe checkout session.
+#### `POST /scans/{scan_id}/checkout?tier=unlock|pro|deep`
+Create a Stripe Checkout session (hosted redirect flow).
 
 **Response:**
 ```json
@@ -242,6 +243,14 @@ Create a Stripe checkout session.
 ```
 
 Redirect user to `checkout_url`. On success, Stripe redirects to `/results/{scan_id}/full?success=true`.
+
+> **Note:** The production frontend uses the embedded card flow instead of the hosted redirect. It calls `POST /scans/{scan_id}/create-payment-intent?tier=...` to get a `client_secret`, collects the card with Stripe Elements, then calls `POST /scans/{scan_id}/confirm-payment?payment_intent_id=...&tier=...` to unlock the report and, for `pro`/`deep`, spawn the child scan. A `POST /webhooks/stripe` endpoint handles `checkout.session.completed` for the hosted flow. Upgrades are rank-aware (`unlock < pro < deep`) — you can only move up.
+
+#### `GET /scans/{scan_id}/child-status`
+For a parent scan, returns the status/progress of any `pro`/`deep` child scan it spawned. Poll this on the results page after a Pro/Deep purchase.
+
+#### `POST /scans/{scan_id}/send-pdf` · `GET /scans/{scan_id}/download-pdf`
+Email or download the PDF report. Paid tiers only (`403` otherwise).
 
 #### `GET /health`
 Health check. Returns `{"status": "healthy"}`.
@@ -367,17 +376,19 @@ Simple, consistent across all pages.
 
 ### Section 4: Pricing (`#pricing`)
 
-**Layout:** Three-column grid, max-width 1000px, centered. Each card is equal height.
+**Layout:** Four-column grid on desktop (2×2 on tablet, horizontal snap-scroll on mobile), max-width 1400px, centered. Each card is equal height.
 
-**Heading:** `Pricing` — font 1.875rem, weight 700, centered.
+**Heading:** `Simple, transparent pricing` — font 1.875rem, weight 700, centered.
+
+**Tier model:** Four tiers. **Free** and **Unlock** operate on the *same* underlying quick scan — Unlock simply reveals the locked details of the report the user already received. **Pro** and **Deep** each additionally launch a brand-new, longer scan (a child scan linked by `parent_scan_id`) at a higher iteration budget. Purchases are one-time and upgrade-only (`unlock < pro < deep`).
 
 **Cards:**
 
 **Card 1: Free Scan**
-- Background: `var(--surface)`
-- Border: 1px `var(--border)`
+- Background: `var(--surface)`, Border: 1px `var(--border)`
 - Title: "Free Scan" — font 1.125rem, weight 600
 - Price: "$0" — font 2rem, weight 700
+- Subtitle: "See if you have vulnerabilities"
 - Feature list (font 0.875rem, color `var(--text-secondary)`):
   - Quick external scan
   - Finding titles and severity
@@ -385,15 +396,12 @@ Simple, consistent across all pages.
   - Impact description
   - ~~Reproduction steps~~ (strikethrough, color `var(--text-dim)`)
   - ~~Proof-of-concept code~~ (strikethrough)
-  - ~~Fix guidance~~ (strikethrough)
 
-**Card 2: Unlock Report (highlighted)**
-- Background: `var(--surface)`
-- Border: 2px `var(--accent)`
-- Subtle glow: `box-shadow: 0 0 40px var(--accent-glow)`
-- A small "Most popular" badge at top-right: background `var(--accent)`, text `var(--bg)`, font 0.6875rem, weight 600, padding 2px 8px, border-radius `var(--radius-sm)`
-- Title: "Unlock Report" — font 1.125rem, weight 600, color `var(--accent)`
-- Price: "$149" — font 2rem, weight 700
+**Card 2: Unlock Report**
+- Background: `var(--surface)`, Border: 1px `var(--border)`
+- Title: "Unlock Report" — font 1.125rem, weight 600
+- Price: "$39" — font 2rem, weight 700
+- Subtitle: "Full report with fixes"
 - Feature list:
   - Everything in Free
   - Full reproduction steps
@@ -401,18 +409,29 @@ Simple, consistent across all pages.
   - Fix guidance per finding
   - PDF export
 
-**Card 3: Deep Analysis**
-- Background: `var(--surface)`
-- Border: 1px `var(--border)`
-- Title: "Deep Analysis" — font 1.125rem, weight 600
-- Price: "$399" — font 2rem, weight 700
+**Card 3: Pro Scan (highlighted)**
+- Background: `var(--surface)`, Border: 2px `var(--accent)`
+- Subtle glow: `box-shadow: 0 0 40px var(--accent-glow)`
+- A small "Most popular" badge at top-right: background `var(--accent)`, text `var(--void)`, font 0.6875rem, weight 600, padding 2px 8px, border-radius `var(--radius-sm)`
+- Title: "Pro Scan" — font 1.125rem, weight 600, color `var(--accent)`
+- Price: "$250" — font 2rem, weight 700
+- Subtitle: "Unlock + new comprehensive scan"
 - Feature list:
   - Everything in Unlock
-  - 1-4 hour thorough deep scan
-  - 7+ vulnerability categories
+  - 300-iteration scan
+  - More attack vectors
+  - Detailed report
+
+**Card 4: Deep Analysis**
+- Background: `var(--surface)`, Border: 1px `var(--border)`
+- Title: "Deep Analysis" — font 1.125rem, weight 600
+- Price: "$899" — font 2rem, weight 700
+- Subtitle: "Unlock + thorough security audit"
+- Feature list:
+  - Everything in Pro
+  - 500-iteration deep scan
+  - Full attack coverage
   - Executive summary
-  - Security certificate
-  - One free rescan
 
 ### Section 5: Footer
 
@@ -601,7 +620,7 @@ Below the impact text, a visually distinct locked section:
 - Background: `var(--surface-raised)` with a CSS `backdrop-filter: blur(4px)` effect on the text content (or just use a translucent overlay)
 - The text inside is intentionally blurred/unreadable — this creates the feeling that the content EXISTS, the user just can't see it yet
 - Over the blur: a lock icon (Lucide `Lock`, 16px) + text: "Reproduction steps, proof-of-concept, and fix guidance" in `var(--text-muted)`, font 0.8125rem
-- Below: an inline button — background `var(--accent)`, text `var(--bg)`, font 0.8125rem, weight 600, padding 8px 16px, border-radius `var(--radius)`. Text: "Unlock full report — $149". Hover: `var(--accent-hover)`.
+- Below: an inline button — background `var(--accent)`, text `var(--bg)`, font 0.8125rem, weight 600, padding 8px 16px, border-radius `var(--radius)`. Text: "Unlock full report — $39". Hover: `var(--accent-hover)`.
 - The button should have a subtle glow: `box-shadow: 0 0 20px var(--accent-glow)`
 
 The blur effect is key to conversion — it should look like there are 4-6 lines of real technical text behind the blur, not just an empty placeholder.
@@ -649,7 +668,7 @@ For free users with findings:
 
 For paid=unlock users:
 - "Go deeper" heading
-- Deep Analysis card with feature list and $399 button
+- Pro Scan ($250) and Deep Analysis ($899) cards with feature lists and CTA buttons
 
 For free users with no findings:
 - "Want to go deeper?" heading
