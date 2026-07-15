@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     strix_path: str = "strix"
     openai_api_key: str = ""  # For report processing with structured outputs
+    # Model for the report-extraction step (OpenAI SDK, separate from the scan LLM). Kept on
+    # gpt-5.2 by default; set REPORT_LLM=gpt-5.6-luna once that id is confirmed to cut cost.
+    report_llm: str = "gpt-5.2"
+    # Route scans through the headless-CLI adapter (strix-agent >= 1.0). Default off until
+    # validated against a live 1.0.x + Docker host. See app/strix_adapter.py.
+    strix_use_cli: bool = False
 
     # Per-tier scan configuration
     tier_quick_llm: str = "openai/gpt-5.2"
@@ -46,6 +52,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"  # Don't crash on unrelated env vars (Railway/CI inject many)
 
 
 settings = Settings()

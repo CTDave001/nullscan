@@ -3,9 +3,11 @@ Report Processor - Extracts structured data from markdown pentest reports
 Uses OpenAI GPT-5.2 with structured outputs for guaranteed schema compliance
 """
 
+import time
 from typing import Optional
 from enum import Enum
 from pydantic import BaseModel
+import openai
 from openai import OpenAI
 
 from app.config import settings
@@ -187,14 +189,27 @@ def extract_structured_report(markdown_report: str) -> dict:
     """
     client = OpenAI(api_key=settings.openai_api_key)
 
-    response = client.responses.parse(
-        model="gpt-5.2",  # Using GPT-5.2 as requested
-        input=[
-            {"role": "system", "content": EXTRACTION_PROMPT},
-            {"role": "user", "content": f"Extract structured data from this penetration test report:\n\n{markdown_report}"},
-        ],
-        text_format=StructuredReport,
-    )
+    # Retry transient OpenAI errors (rate limits, timeouts) with backoff before giving up.
+    # These were silently forcing the empty "Indeterminate" fallback report on costly scans.
+    response = None
+    for attempt in range(3):
+        try:
+            response = client.responses.parse(
+                model=settings.report_llm,  # Report extraction only (separate from the scan LLM)
+                input=[
+                    {"role": "system", "content": EXTRACTION_PROMPT},
+                    {"role": "user", "content": f"Extract structured data from this penetration test report:\n\n{markdown_report}"},
+                ],
+                text_format=StructuredReport,
+            )
+            break
+        except (openai.RateLimitError, openai.APITimeoutError,
+                openai.APIConnectionError, openai.InternalServerError) as e:
+            if attempt == 2:
+                raise
+            wait = 2 * (2 ** attempt)  # 2s, then 4s
+            print(f"[ReportProcessor] transient OpenAI error (attempt {attempt + 1}/3): {e}; retrying in {wait}s")
+            time.sleep(wait)
 
     # Handle potential refusal
     if hasattr(response, 'output') and response.output:

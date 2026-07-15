@@ -338,10 +338,14 @@ async def _update_progress(
                         "tasks and call agent_finish NOW. Then generate your final report and call "
                         "finish_scan. No new tests or scans — wrap up with what you have."
                     )
-                    # Give the agent a few iterations to wrap up, then it hits max
-                    agent.state.max_iterations = min(
-                        agent.state.max_iterations,
-                        agent.state.iteration + 8,
+                    # Give the agent a few iterations to wrap up, then it hits max.
+                    # Guard against None (Strix internals occasionally leave these unset,
+                    # which previously crashed the scan with a NoneType comparison error).
+                    _cur_iter = getattr(agent.state, "iteration", 0) or 0
+                    _cur_max = getattr(agent.state, "max_iterations", None)
+                    _wrapup_cap = _cur_iter + 8
+                    agent.state.max_iterations = (
+                        min(_cur_max, _wrapup_cap) if _cur_max is not None else _wrapup_cap
                     )
                 except Exception as e:
                     print(f"[cost] Failed to send wrap-up message: {e}", flush=True)
@@ -458,6 +462,13 @@ async def run_strix_scan_async(
     Run Strix scan using Python API (follows original CLI pattern).
     Returns parsed results or error dict.
     """
+    # Durable path: route to the supported headless-CLI adapter when enabled. The in-process
+    # code below targets the 0.x internals and breaks on strix-agent >= 1.0 (see the rebuild
+    # plan). Flag stays off until the adapter is validated on a live 1.0.x + Docker host.
+    if settings.strix_use_cli:
+        from app.strix_adapter import run_strix_cli_scan_async
+        return await run_strix_cli_scan_async(target_url, scan_type, scan_id)
+
     # Configure scan mode, iterations, cost limit, agent cap, and wait timeout per tier
     tier_config = {
         "quick": (settings.tier_quick_llm, settings.tier_quick_iterations, settings.tier_quick_mode, settings.tier_quick_cost_limit, settings.tier_quick_max_agents, settings.tier_quick_wait_timeout),
@@ -916,6 +927,19 @@ async def run_strix_scan_async(
         cleanup_runtime()
 
         print(f"[strix] === FINAL: {len(findings)} findings, structured_report={'yes' if structured_report else 'no'} ===", flush=True)
+
+        # Fail loudly instead of returning a hollow success. A scan that produced neither a
+        # structured report nor any findings means the pipeline broke (agent or report-
+        # extraction failure) — NOT that the target is genuinely clean. Returning it as a
+        # completed "Clean" result is the bug where costly scans showed "100% clean, no data".
+        # (A genuinely clean target still yields a structured_report with categories tested.)
+        if not structured_report and not findings:
+            print("[strix] No structured report and no findings — marking failed, not clean", flush=True)
+            return {
+                "error": "no_report",
+                "message": "Scan completed but produced no usable report or findings.",
+                "findings": [],
+            }
 
         result = {"findings": findings}
         if structured_report:

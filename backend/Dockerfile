@@ -20,8 +20,12 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Strix
-RUN pip install strix-agent
+# Install Strix — PINNED. The current integration uses the 0.x Python API
+# (strix.agents.StrixAgent, strix.telemetry.tracer.Tracer, agents_graph_actions).
+# strix-agent 1.0.0 (2026-05-26) is a breaking rewrite that deletes all of those, so an
+# unpinned install silently upgrades and makes every scan fail at import. Do NOT unpin
+# until the headless-CLI/SARIF rebuild lands (see docs/plans/2026-07-13-...).
+RUN pip install "strix-agent==0.7.0"
 
 # Copy application
 COPY . .

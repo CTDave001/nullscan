@@ -13,8 +13,9 @@ SELF_SCAN_DOMAINS = {"nullscan.io", "www.nullscan.io"}
 def cleanup_strix_containers():
     """Remove all strix sandbox Docker containers."""
     try:
+        # Untagged ancestor matches every strix-sandbox tag (0.1.11 for 0.x, 1.0.0 for 1.0.x).
         result = subprocess.run(
-            ["docker", "ps", "-a", "-q", "--filter", "ancestor=ghcr.io/usestrix/strix-sandbox:0.1.11"],
+            ["docker", "ps", "-a", "-q", "--filter", "ancestor=ghcr.io/usestrix/strix-sandbox"],
             capture_output=True, text=True, timeout=10,
         )
         container_ids = result.stdout.strip().split("\n")
