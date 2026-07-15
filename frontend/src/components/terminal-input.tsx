@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { captureAttribution, getAttribution, track } from "@/lib/analytics"
 
 type PaidTier = "pro" | "deep" | null
 
@@ -44,6 +45,11 @@ export function TerminalInput({ paidTier = null }: TerminalInputProps) {
     }
     window.addEventListener("launch-scan", handleLaunchScan)
     return () => window.removeEventListener("launch-scan", handleLaunchScan)
+  }, [])
+
+  // Capture first-touch attribution (UTM + referrer) as early as possible
+  useEffect(() => {
+    captureAttribution()
   }, [])
 
   // Auto-focus on mount and step change
@@ -153,6 +159,7 @@ export function TerminalInput({ paidTier = null }: TerminalInputProps) {
             email,
             target_url: url,
             consent: true,
+            ...getAttribution(),
           }),
         })
 
@@ -163,6 +170,7 @@ export function TerminalInput({ paidTier = null }: TerminalInputProps) {
 
         const data = await res.json()
         const scanId = data.id
+        track("scan_started", { tier: paidTier ?? "free" }, scanId)
 
         if (paidTier) {
           // Paid tier: redirect to Stripe checkout

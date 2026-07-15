@@ -116,8 +116,8 @@ async def send_payment_received_email(email: str, scan_id: str, tier: str):
             <h2>Thank you for your purchase!</h2>
             <p>Your full security report is now available.</p>
             <p>
-                <a href="{settings.frontend_url}/results/{scan_id}/full"
-                   style="background: #2563eb; color: white; padding: 12px 24px;
+                <a href="{settings.frontend_url}/results/{scan_id}"
+                   style="background: #06b6d4; color: #09090b; padding: 12px 24px;
                           text-decoration: none; border-radius: 6px; display: inline-block;">
                     View Full Report
                 </a>

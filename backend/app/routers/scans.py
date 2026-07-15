@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import stripe
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
-from app.database import database, scans, rate_limits
+from app.database import database, scans, rate_limits, events
 from app.models import (
     ScanCreate, ScanResponse, ScanResults, ScanResultFinding,
     StructuredReportResponse, ScanStatsResponse, CategoryResultResponse,
@@ -116,6 +116,11 @@ async def create_scan(scan: ScanCreate):
             target_url=str(scan.target_url),
             status="pending",
             scan_type="quick",  # Free scans are quick, deep scans require payment
+            utm_source=scan.utm_source,
+            utm_medium=scan.utm_medium,
+            utm_campaign=scan.utm_campaign,
+            referrer=scan.referrer,
+            landing_page=scan.landing_page,
         )
     )
 
@@ -168,7 +173,7 @@ async def create_checkout(scan_id: str, tier: str):
             "quantity": 1,
         }],
         mode="payment",
-        success_url=f"{settings.frontend_url}/results/{scan_id}/full?success=true",
+        success_url=f"{settings.frontend_url}/results/{scan_id}?payment_success=true&tier={tier}",
         cancel_url=f"{settings.frontend_url}/results/{scan_id}?cancelled=true",
         metadata={
             "scan_id": scan_id,
@@ -250,36 +255,17 @@ async def confirm_payment(scan_id: str, payment_intent_id: str, tier: str):
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Update scan with paid tier (upgrade-aware)
-    current_rank = TIER_RANK.get(scan["paid_tier"], 0)
-    new_rank = TIER_RANK.get(tier, 0)
-    if new_rank > current_rank:
-        await database.execute(
-            scans.update()
-            .where(scans.c.id == scan_id)
-            .values(paid_tier=tier, stripe_payment_id=intent.id)
-        )
+    # Apply the tier + spawn any child scan. Idempotent and shared with the Stripe
+    # webhook, so a payment delivered via both channels only takes effect once.
+    from app.payments import apply_paid_tier
+    child_scan_id, newly_applied = await apply_paid_tier(scan, tier, intent.id)
 
-    # Send confirmation email
-    from app.email_service import send_payment_received_email
-    await send_payment_received_email(scan["email"], scan_id, tier)
-
-    # If pro or deep, create child scan
-    child_scan_id = None
-    if tier in ("pro", "deep"):
-        child_scan_id = str(uuid.uuid4())
-        await database.execute(
-            scans.insert().values(
-                id=child_scan_id,
-                email=scan["email"],
-                target_url=scan["target_url"],
-                status="pending",
-                scan_type=tier,
-                parent_scan_id=scan_id,
-            )
-        )
-        from app.email_service import send_deep_scan_started_email
-        await send_deep_scan_started_email(scan["email"], child_scan_id, scan["target_url"])
+    if newly_applied:
+        from app.email_service import send_payment_received_email
+        await send_payment_received_email(scan["email"], scan_id, tier)
+        if child_scan_id:
+            from app.email_service import send_deep_scan_started_email
+            await send_deep_scan_started_email(scan["email"], child_scan_id, scan["target_url"])
 
     return {"success": True, "message": "Payment confirmed", "child_scan_id": child_scan_id}
 
@@ -788,3 +774,76 @@ async def admin_cancel_scan(scan_id: str, key: str = ""):
     )
 
     return {"success": True, "message": f"Scan {scan_id} is being cancelled"}
+
+
+@router.get("/admin/analytics")
+async def admin_analytics(key: str = ""):
+    """First-party funnel + traffic-source analytics.
+
+    Answers two questions from our own data (no dependence on Google Analytics, which
+    dev audiences heavily block): where do scans come from, and where in the funnel do
+    people drop before buying.
+    """
+    if not settings.admin_api_key or key != settings.admin_api_key:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    all_scans = await database.fetch_all(scans.select())
+    # Attribute on root scans only (child pro/deep scans inherit their parent's source).
+    root_scans = [s for s in all_scans if not s["parent_scan_id"]]
+    total_scans = len(root_scans)
+    paid_scans = [s for s in all_scans if s["paid_tier"]]
+
+    def _source(s) -> str:
+        if s["utm_source"]:
+            return s["utm_source"]
+        ref = s["referrer"]
+        if ref:
+            try:
+                return (urlparse(ref).hostname or ref).replace("www.", "")
+            except Exception:
+                return ref
+        return "direct"
+
+    by_source: dict[str, dict] = {}
+    for s in root_scans:
+        entry = by_source.setdefault(_source(s), {"scans": 0, "paid": 0})
+        entry["scans"] += 1
+        if s["paid_tier"]:
+            entry["paid"] += 1
+
+    # Funnel = distinct sessions that fired each event; plus raw autocapture aggregates.
+    from collections import Counter
+    all_events = await database.fetch_all(events.select())
+    funnel_sessions: dict[str, set] = {}
+    event_counts: Counter = Counter()
+    page_counts: Counter = Counter()
+    click_targets: Counter = Counter()
+    for e in all_events:
+        funnel_sessions.setdefault(e["name"], set()).add(e["session_id"])
+        event_counts[e["name"]] += 1
+        if e["name"] == "pageview" and e["path"]:
+            page_counts[e["path"]] += 1
+        elif e["name"] == "click" and e["props_json"]:
+            try:
+                p = json.loads(e["props_json"])
+                label = p.get("text") or p.get("track_id") or p.get("aria") or p.get("id") or p.get("tag")
+                if label:
+                    click_targets[str(label)[:60]] += 1
+            except (json.JSONDecodeError, TypeError):
+                pass
+    funnel = {name: len(sessions) for name, sessions in funnel_sessions.items()}
+
+    revenue_by_tier = {"unlock": 39, "pro": 250, "deep": 899}
+    revenue = sum(revenue_by_tier.get(s["paid_tier"], 0) for s in paid_scans)
+
+    return {
+        "total_scans": total_scans,
+        "paid_scans": len(paid_scans),
+        "conversion_rate": round(len(paid_scans) / total_scans, 4) if total_scans else 0,
+        "estimated_revenue_usd": revenue,
+        "by_source": dict(sorted(by_source.items(), key=lambda kv: kv[1]["scans"], reverse=True)),
+        "funnel": funnel,
+        "event_counts": dict(event_counts.most_common(25)),
+        "top_pages": dict(page_counts.most_common(15)),
+        "top_clicks": dict(click_targets.most_common(25)),
+    }

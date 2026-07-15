@@ -9,6 +9,7 @@ import {
   useElements,
 } from "@stripe/react-stripe-js"
 import { X, Lock, Shield, Check, CreditCard, Zap, AlertTriangle } from "lucide-react"
+import { track } from "@/lib/analytics"
 
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
@@ -96,6 +97,7 @@ function CheckoutForm({
 
     setIsProcessing(true)
     setError(null)
+    track("payment_started", { tier: tier.id, price: tier.price }, scanId)
 
     const { error: submitError, paymentIntent } = await stripe.confirmPayment({
       elements,
@@ -110,6 +112,7 @@ function CheckoutForm({
 
     if (submitError) {
       setError(submitError.message || "Payment failed")
+      track("payment_failed", { tier: tier.id, reason: submitError.message }, scanId)
       setIsProcessing(false)
       return
     }
@@ -125,9 +128,11 @@ function CheckoutForm({
 
         const data = await res.json()
         setSucceeded(true)
+        track("payment_succeeded", { tier: tier.id, price: tier.price }, scanId)
         setTimeout(() => onSuccess(data.child_scan_id), 1500)
       } catch (err) {
         setError("Payment succeeded but failed to unlock. Please contact support.")
+        track("payment_unlock_failed", { tier: tier.id }, scanId)
       }
     }
 
@@ -266,6 +271,7 @@ export function CheckoutModal({
 
   const handleSelectTier = async (tier: TierOption) => {
     setSelectedTier(tier)
+    track("checkout_tier_selected", { tier: tier.id, price: tier.price }, scanId)
     setLoading(true)
     setError(null)
 

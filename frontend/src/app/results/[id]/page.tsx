@@ -7,6 +7,7 @@ import { GridOverlay, CornerMarkers } from "@/components/grid-overlay"
 import { NullscanLogo } from "@/components/nullscan-logo"
 import { Footer } from "@/components/footer"
 import { CheckoutModal } from "@/components/checkout-modal"
+import { track } from "@/lib/analytics"
 import {
   Lock,
   Check,
@@ -162,6 +163,7 @@ export default function ResultsPage() {
   const [checkoutTier, setCheckoutTier] = useState<"pro" | "deep" | undefined>(undefined)
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
+  const [reconciling, setReconciling] = useState(false)
   const [childStatus, setChildStatus] = useState<{
     has_child: boolean
     status?: string
@@ -181,6 +183,7 @@ export default function ResultsPage() {
         }
         const data = await res.json()
         setResults(data)
+        track("results_viewed", { paid_tier: data.paid_tier, risk: data.risk_level }, scanId)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong")
       } finally {
@@ -188,6 +191,51 @@ export default function ResultsPage() {
       }
     }
     fetchResults()
+  }, [scanId])
+
+  // Reconcile a redirect-based payment (3DS / Link / hosted checkout). The Stripe webhook
+  // applies the tier server-side; here we poll until it lands, then swap in the unlocked
+  // report. This is what previously failed silently, losing the sale.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("payment_success") !== "true") return
+
+    track("payment_succeeded", { tier: params.get("tier") ?? undefined, via: "redirect" }, scanId)
+    setReconciling(true)
+
+    let cancelled = false
+    let attempts = 0
+    const poll = async () => {
+      attempts++
+      try {
+        const metaRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}`)
+        if (metaRes.ok) {
+          const meta = await metaRes.json()
+          if (meta.paid_tier) {
+            const rres = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/results`)
+            if (rres.ok && !cancelled) setResults(await rres.json())
+            if (!cancelled) {
+              setReconciling(false)
+              window.history.replaceState({}, "", `/results/${scanId}`)
+            }
+            return
+          }
+        }
+      } catch {
+        /* ignore and retry */
+      }
+      if (!cancelled && attempts < 15) {
+        setTimeout(poll, 2000)
+      } else if (!cancelled) {
+        setReconciling(false)
+      }
+    }
+    poll()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanId])
 
   // Poll child scan status
@@ -234,6 +282,7 @@ export default function ResultsPage() {
   }
 
   const openCheckout = (tier?: "pro" | "deep") => {
+    track("checkout_opened", { tier: tier ?? "unlock" }, scanId)
     setCheckoutTier(tier)
     setShowCheckoutModal(true)
   }
@@ -338,6 +387,16 @@ export default function ResultsPage() {
       <StatusBar />
       <GridOverlay />
       <CornerMarkers />
+
+      {reconciling && (
+        <div
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 px-4 py-2 rounded-[var(--radius)] font-mono text-xs"
+          style={{ backgroundColor: "var(--surface)", border: "1px solid var(--cyan)", color: "var(--cyan)" }}
+        >
+          <div className="w-3 h-3 border-2 rounded-full animate-spin" style={{ borderColor: "var(--cyan)", borderTopColor: "transparent" }} />
+          Confirming your payment…
+        </div>
+      )}
 
       <main className="relative z-10 pt-16">
         {/* Header Bar */}
