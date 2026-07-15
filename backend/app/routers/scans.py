@@ -807,6 +807,34 @@ setInterval(function(){if(document.getElementById('auto').checked)location.reloa
     return HTMLResponse(content=html)
 
 
+@router.get("/admin/report/{scan_id}")
+async def admin_full_report(scan_id: str, key: str = ""):
+    """Admin-only: the FULL unfiltered scan report (all finding details incl. PoC, technical
+    analysis, and remediation) — not tier-filtered like /results."""
+    if not settings.admin_api_key or key != settings.admin_api_key:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    scan = await database.fetch_one(scans.select().where(scans.c.id == scan_id))
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    # Prefer a completed pro/deep child scan's results, like the /results endpoint does.
+    child = await database.fetch_one(
+        scans.select()
+        .where((scans.c.parent_scan_id == scan_id) & (scans.c.status == "completed"))
+        .order_by(scans.c.completed_at.desc())
+    )
+    src = child if child else scan
+    results = json.loads(src["results_json"]) if src["results_json"] else {}
+    return {
+        "scan_id": scan_id,
+        "status": scan["status"],
+        "target_url": scan["target_url"],
+        "scan_type": src["scan_type"],
+        "results": results,
+    }
+
+
 @router.post("/admin/cancel/{scan_id}")
 async def admin_cancel_scan(scan_id: str, key: str = ""):
     """Admin endpoint to cancel a running scan."""
