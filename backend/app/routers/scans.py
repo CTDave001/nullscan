@@ -607,22 +607,31 @@ async def download_pdf_report(scan_id: str):
 
 
 @router.get("/admin/dashboard")
-async def admin_dashboard(key: str = "", format: str = "html"):
-    """Admin endpoint to view all scans and their statuses."""
+async def admin_dashboard(key: str = "", format: str = "html", limit: int = 250):
+    """Admin endpoint to view scans. The table shows the most recent `limit` scans
+    (default 250, max 2000), but the KPI counts are over ALL scans, not just that page."""
     if not settings.admin_api_key or key != settings.admin_api_key:
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    import sqlalchemy as sa
+
+    limit = max(1, min(limit, 2000))
+
+    # Status totals over ALL scans (not just the displayed page).
+    summary = {"pending": 0, "running": 0, "completed": 0, "failed": 0}
+    for r in await database.fetch_all(
+        sa.select(scans.c.status, sa.func.count().label("n")).group_by(scans.c.status)
+    ):
+        summary[r["status"]] = r["n"]
+
+    # Most-recent `limit` scans for the table.
     all_scans = await database.fetch_all(
-        scans.select().order_by(scans.c.created_at.desc()).limit(100)
+        scans.select().order_by(scans.c.created_at.desc()).limit(limit)
     )
 
-    summary = {"pending": 0, "running": 0, "completed": 0, "failed": 0}
     scan_list = []
-
     for s in all_scans:
         status = s["status"]
-        summary[status] = summary.get(status, 0) + 1
-
         scan_info = {
             "id": s["id"],
             "email": s["email"],
@@ -634,18 +643,17 @@ async def admin_dashboard(key: str = "", format: str = "html"):
             "created_at": str(s["created_at"]),
             "completed_at": str(s["completed_at"]) if s["completed_at"] else None,
         }
-
         if status in ("running", "completed", "failed", "cancelling") and s["progress_json"]:
             progress = json.loads(s["progress_json"])
             scan_info["cost"] = progress.get("cost", 0)
             scan_info["tools"] = progress.get("tools", 0)
             if status in ("running", "cancelling"):
                 scan_info["active_agents"] = progress.get("active_agents", 0)
-
         scan_list.append(scan_info)
 
     if format == "json":
-        return {"summary": summary, "scans": scan_list}
+        return {"summary": summary, "total": sum(summary.values()),
+                "showing": len(all_scans), "scans": scan_list}
 
     # Build the polished HTML dashboard.
     from datetime import datetime, timezone
@@ -760,6 +768,7 @@ tbody tr:hover td{background:#1c1c20}
     script = """<script>
 var KEY = new URLSearchParams(location.search).get('key') || '';
 document.getElementById('analytics').href = '/scans/admin/analytics?key=' + encodeURIComponent(KEY);
+document.querySelectorAll('[data-limit]').forEach(function(a){a.href='?key='+encodeURIComponent(KEY)+'&limit='+a.getAttribute('data-limit');});
 document.getElementById('jsonlink').onclick = function(e){e.preventDefault();var u=new URL(location);u.searchParams.set('format','json');location=u;};
 function toast(msg, ok){var t=document.getElementById('toast');t.textContent=msg;t.style.display='block';t.style.background=ok?'#052e16':'#450a0a';t.style.color=ok?'#22c55e':'#ef4444';t.style.border='1px solid '+(ok?'#166534':'#991b1b');setTimeout(function(){t.style.display='none'},3000);}
 async function cancelScan(id){if(!confirm('Cancel scan '+id.slice(0,8)+'?'))return;try{var r=await fetch('/scans/admin/cancel/'+id+'?key='+encodeURIComponent(KEY),{method:'POST'});var d=await r.json();if(r.ok){toast('Cancelling…',true);setTimeout(function(){location.reload()},2000);}else toast(d.detail||'Failed',false);}catch(e){toast('Error: '+e.message,false);}}
@@ -768,8 +777,11 @@ setInterval(function(){if(document.getElementById('auto').checked)location.reloa
 
     body = (
         '<header><div><h1><span class="n">null</span>scan scans</h1>'
-        '<div class="sub">live · auto-refresh 10s</div></div>'
+        f'<div class="sub">live · auto-refresh 10s · showing {len(all_scans)} of {total}</div></div>'
         '<div class="tools"><label class="sub"><input type="checkbox" id="auto" checked> auto</label>'
+        '<a class="btn" data-limit="250" href="#">250</a>'
+        '<a class="btn" data-limit="500" href="#">500</a>'
+        '<a class="btn" data-limit="2000" href="#">All</a>'
         '<a class="btn" id="analytics" href="#">Analytics</a>'
         '<a class="btn" id="jsonlink" href="#">JSON</a>'
         '<button class="btn" onclick="location.reload()">Refresh</button></div></header>'
@@ -778,7 +790,7 @@ setInterval(function(){if(document.getElementById('auto').checked)location.reloa
         f'<div class="kpi"><div class="v" style="color:#06b6d4">{summary.get("running",0)}</div><div class="l">Running</div></div>'
         f'<div class="kpi"><div class="v" style="color:#22c55e">{summary.get("completed",0)}</div><div class="l">Completed</div></div>'
         f'<div class="kpi"><div class="v" style="color:#ef4444">{summary.get("failed",0)}</div><div class="l">Failed</div></div>'
-        f'<div class="kpi"><div class="v">{total}</div><div class="l">Total · last 100</div></div>'
+        f'<div class="kpi"><div class="v">{total}</div><div class="l">Total scans</div></div>'
         '</div>'
         '<div class="tablewrap"><table><thead><tr>'
         '<th>Target</th><th>Status</th><th>Type</th><th>Tier</th><th>Cost</th>'
