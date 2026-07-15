@@ -20,12 +20,12 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Strix — PINNED. The current integration uses the 0.x Python API
-# (strix.agents.StrixAgent, strix.telemetry.tracer.Tracer, agents_graph_actions).
-# strix-agent 1.0.0 (2026-05-26) is a breaking rewrite that deletes all of those, so an
-# unpinned install silently upgrades and makes every scan fail at import. Do NOT unpin
-# until the headless-CLI/SARIF rebuild lands (see docs/plans/2026-07-13-...).
-RUN pip install "strix-agent==0.7.0"
+# Install Strix — PINNED to 1.1.0 for the headless-CLI adapter (this branch runs the rebuild).
+# The adapter shells out to `strix -n` and parses run.json/vulnerabilities.json (validated
+# against the 1.0.4 + 1.1.0 wheels and a live scan). Activating it REQUIRES: STRIX_USE_CLI=true
+# and STRIX_LLM set, AND the runtime being able to pull the ~11GB strix-sandbox:1.0.0 image.
+# See docs/STRIX_CUTOVER.md for the deploy + rollback runbook.
+RUN pip install "strix-agent==1.1.0"
 
 # Copy application
 COPY . .
