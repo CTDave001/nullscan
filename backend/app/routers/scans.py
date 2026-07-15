@@ -858,6 +858,7 @@ def _render_analytics_html(data: dict) -> str:
             f'<div class="fbarwrap"><div class="fbar" style="width:{w:.1f}%"></div>'
             f'<span class="fcount">{n}</span></div><div class="fdrop">{drop}</div></div>'
         )
+        prev = n
     funnel_html = "".join(frows)
 
     srows = []
