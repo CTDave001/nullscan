@@ -647,105 +647,149 @@ async def admin_dashboard(key: str = "", format: str = "html"):
     if format == "json":
         return {"summary": summary, "scans": scan_list}
 
-    # Build HTML admin dashboard
+    # Build the polished HTML dashboard.
+    from datetime import datetime, timezone
+    import html as _h
+
     status_colors = {
-        "pending": "#eab308",
-        "running": "#06b6d4",
-        "completed": "#22c55e",
-        "failed": "#ef4444",
-        "cancelling": "#f97316",
+        "pending": "#eab308", "running": "#06b6d4", "completed": "#22c55e",
+        "failed": "#ef4444", "cancelling": "#f97316",
     }
 
-    rows = ""
-    for s in scan_list:
-        sc = status_colors.get(s["status"], "#71717a")
-        cost_str = f"${s.get('cost', 0):.4f}" if "cost" in s else "-"
-        agents_str = str(s.get("active_agents", "-")) if s["status"] in ("running", "cancelling") else "-"
-        tier_str = s.get("paid_tier") or "free"
-        actions = ""
-        if s["status"] in ("running", "pending", "cancelling"):
-            view_url = f'{settings.frontend_url}/scan/{s["id"]}'
-            actions += f'<a href="{view_url}" target="_blank" style="padding:4px 12px;background:#06b6d4;color:#09090b;border:none;border-radius:4px;cursor:pointer;font-size:12px;text-decoration:none;margin-right:6px;">View</a>'
-        if s["status"] == "completed":
-            view_url = f'{settings.frontend_url}/results/{s["id"]}'
-            actions += f'<a href="{view_url}" target="_blank" style="padding:4px 12px;background:#22c55e;color:#09090b;border:none;border-radius:4px;cursor:pointer;font-size:12px;text-decoration:none;margin-right:6px;">Results</a>'
-        if s["status"] in ("running", "pending"):
-            actions += f'<button onclick="cancelScan(\'{s["id"]}\')" style="padding:4px 12px;background:#ef4444;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Cancel</button>'
+    def _fmt_dt(dt):
+        try:
+            return dt.strftime("%b %d, %H:%M") if dt else "—"
+        except Exception:
+            return str(dt)[:16]
 
-        rows += f"""<tr style="border-bottom:1px solid #27272a;">
-            <td style="padding:8px;font-family:monospace;font-size:12px;color:#a1a1aa;">{s["id"][:12]}</td>
-            <td style="padding:8px;font-size:13px;color:#fafafa;">{s["target_url"]}</td>
-            <td style="padding:8px;"><span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:{sc}20;color:{sc};text-transform:uppercase;">{s["status"]}</span></td>
-            <td style="padding:8px;font-size:12px;color:#a1a1aa;text-transform:uppercase;">{s["scan_type"]}</td>
-            <td style="padding:8px;font-size:12px;color:#a1a1aa;">{tier_str}</td>
-            <td style="padding:8px;font-family:monospace;font-size:12px;color:#fafafa;">{cost_str}</td>
-            <td style="padding:8px;font-size:12px;color:#a1a1aa;">{agents_str}</td>
-            <td style="padding:8px;font-size:12px;color:#71717a;">{s.get("email", "")}</td>
-            <td style="padding:8px;white-space:nowrap;">{actions}</td>
-        </tr>"""
+    def _fmt_dur(start, end):
+        try:
+            if not start:
+                return "—"
+            if end:
+                secs = (end - start).total_seconds()
+            else:
+                s0 = start if start.tzinfo else start.replace(tzinfo=timezone.utc)
+                secs = (datetime.now(timezone.utc) - s0).total_seconds()
+            if secs < 0:
+                return "—"
+            m, sec = divmod(int(secs), 60)
+            if m >= 60:
+                h, m = divmod(m, 60)
+                return f"{h}h {m}m"
+            return f"{m}m {sec}s" if m else f"{sec}s"
+        except Exception:
+            return "—"
 
-    html = f"""<!DOCTYPE html>
-<html><head><title>Nullscan Admin</title>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-  body {{ margin:0; padding:24px; background:#09090b; color:#fafafa; font-family:-apple-system,sans-serif; }}
-  h1 {{ font-size:20px; font-weight:600; margin:0 0 20px 0; color:#fafafa; }}
-  .stats {{ display:flex; gap:12px; margin-bottom:24px; flex-wrap:wrap; }}
-  .stat {{ padding:12px 20px; border-radius:8px; background:#18181b; border:1px solid #27272a; }}
-  .stat-val {{ font-size:24px; font-weight:700; font-family:monospace; }}
-  .stat-label {{ font-size:11px; color:#71717a; text-transform:uppercase; letter-spacing:0.05em; margin-top:2px; }}
-  table {{ width:100%; border-collapse:collapse; background:#18181b; border-radius:8px; overflow:hidden; border:1px solid #27272a; }}
-  th {{ padding:10px 8px; text-align:left; font-size:11px; color:#71717a; text-transform:uppercase; letter-spacing:0.05em; border-bottom:1px solid #27272a; background:#111113; }}
-  .toast {{ position:fixed; top:20px; right:20px; padding:12px 20px; border-radius:8px; font-size:13px; display:none; z-index:99; }}
-  .refresh-btn {{ padding:6px 16px; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:6px; cursor:pointer; font-size:12px; }}
-  .refresh-btn:hover {{ background:#3f3f46; color:#fafafa; }}
-</style></head><body>
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-  <h1>Nullscan Admin</h1>
-  <div style="display:flex;gap:8px;align-items:center;">
-    <label style="font-size:12px;color:#71717a;"><input type="checkbox" id="autoRefresh" checked style="margin-right:4px;">Auto-refresh</label>
-    <button class="refresh-btn" onclick="location.reload()">Refresh</button>
-  </div>
-</div>
-<div class="stats">
-  <div class="stat"><div class="stat-val" style="color:#eab308;">{summary.get("pending",0)}</div><div class="stat-label">Pending</div></div>
-  <div class="stat"><div class="stat-val" style="color:#06b6d4;">{summary.get("running",0)}</div><div class="stat-label">Running</div></div>
-  <div class="stat"><div class="stat-val" style="color:#22c55e;">{summary.get("completed",0)}</div><div class="stat-label">Completed</div></div>
-  <div class="stat"><div class="stat-val" style="color:#ef4444;">{summary.get("failed",0)}</div><div class="stat-label">Failed</div></div>
-</div>
-<div id="toast" class="toast"></div>
-<table>
-  <thead><tr>
-    <th>ID</th><th>Target</th><th>Status</th><th>Type</th><th>Tier</th><th>Cost</th><th>Agents</th><th>Email</th><th>Action</th>
-  </tr></thead>
-  <tbody>{rows}</tbody>
-</table>
-<script>
-const KEY = new URLSearchParams(window.location.search).get('key');
-function showToast(msg, ok) {{
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.display = 'block';
-  t.style.background = ok ? '#052e16' : '#450a0a';
-  t.style.color = ok ? '#22c55e' : '#ef4444';
-  t.style.border = '1px solid ' + (ok ? '#166534' : '#991b1b');
-  setTimeout(() => t.style.display = 'none', 3000);
-}}
-async function cancelScan(id) {{
-  if (!confirm('Cancel scan ' + id.slice(0,12) + '?')) return;
-  try {{
-    const r = await fetch('/scans/admin/cancel/' + id + '?key=' + KEY, {{method:'POST'}});
-    const d = await r.json();
-    if (r.ok) {{ showToast('Scan cancelling...', true); setTimeout(() => location.reload(), 2000); }}
-    else showToast(d.detail || 'Failed', false);
-  }} catch(e) {{ showToast('Error: ' + e.message, false); }}
-}}
-// Auto-refresh every 10s
-setInterval(() => {{
-  if (document.getElementById('autoRefresh').checked) location.reload();
-}}, 10000);
-</script>
-</body></html>"""
+    rows = []
+    for s in all_scans:
+        st = s["status"]
+        color = status_colors.get(st, "#71717a")
+        prog = json.loads(s["progress_json"]) if s["progress_json"] else {}
+        cost = prog.get("cost")
+        cost_str = f"${cost:.2f}" if isinstance(cost, (int, float)) else "—"
+        tier = s["paid_tier"] or "free"
+        sid = s["id"]
+        if st in ("completed", "failed"):
+            dur = _fmt_dur(s["created_at"], s["completed_at"])
+        elif st in ("running", "cancelling"):
+            dur = _fmt_dur(s["created_at"], None)
+        else:
+            dur = "—"
+        acts = ""
+        if st in ("running", "pending", "cancelling"):
+            acts += f'<a class="act av" href="{settings.frontend_url}/scan/{sid}" target="_blank">View</a>'
+        if st == "completed":
+            acts += f'<a class="act ar" href="{settings.frontend_url}/results/{sid}" target="_blank">Results</a>'
+        if st in ("running", "pending"):
+            acts += f"<button class=\"act ac\" onclick=\"cancelScan('{sid}')\">Cancel</button>"
+        rows.append(
+            f'<tr><td class="tgt" title="{_h.escape(s["target_url"])}">{_h.escape(s["target_url"])}'
+            f'<div class="idsub mono">{sid[:8]}</div></td>'
+            f'<td><span class="pill" style="background:{color}22;color:{color}">{st}</span></td>'
+            f'<td class="up dim">{s["scan_type"]}</td>'
+            f'<td>{tier}</td>'
+            f'<td class="cost">{cost_str}</td>'
+            f'<td class="mono ts">{_fmt_dt(s["created_at"])}</td>'
+            f'<td class="mono dim ts">{dur}</td>'
+            f'<td class="dim em">{_h.escape(s["email"] or "")}</td>'
+            f'<td class="nowrap">{acts}</td></tr>'
+        )
+    rows_html = "".join(rows) or '<tr><td colspan="9" class="empty">No scans yet</td></tr>'
+    total = sum(summary.values())
+
+    css = """<style>
+:root{--bg:#09090b;--surface:#18181b;--border:#27272a;--text:#fafafa;--muted:#a1a1aa;--dim:#71717a;--cyan:#06b6d4}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;max-width:1320px;margin:0 auto}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px}
+h1{font-size:19px;font-weight:700;letter-spacing:-.02em}
+h1 .n{color:var(--cyan)}
+.sub{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+.tools{display:flex;gap:8px;align-items:center}
+.btn{padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:none}
+.btn:hover{border-color:var(--cyan);color:var(--text)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:22px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.kpi .v{font-size:26px;font-weight:700;font-family:'SF Mono',ui-monospace,monospace}
+.kpi .l{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+.tablewrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:960px}
+th{padding:11px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--dim);letter-spacing:.05em;background:#141416;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--muted);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#1c1c20}
+.mono{font-family:'SF Mono',ui-monospace,monospace}
+.dim{color:var(--dim)}
+.up{text-transform:uppercase;font-size:12px}
+.nowrap{white-space:nowrap}
+.tgt{color:var(--text);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.idsub{font-size:11px;color:var(--dim);margin-top:2px}
+.ts{font-size:12px;white-space:nowrap}
+.em{font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cost{font-family:'SF Mono',monospace;color:var(--text)}
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.act{padding:4px 11px;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;border:none;cursor:pointer;margin-right:6px;display:inline-block}
+.av{background:var(--cyan);color:#09090b}
+.ar{background:#22c55e;color:#09090b}
+.ac{background:transparent;border:1px solid #ef4444;color:#ef4444}
+.empty{text-align:center;color:var(--dim);padding:24px}
+.toast{position:fixed;top:20px;right:20px;padding:12px 18px;border-radius:8px;font-size:13px;display:none;z-index:99}
+</style>"""
+
+    script = """<script>
+var KEY = new URLSearchParams(location.search).get('key') || '';
+document.getElementById('analytics').href = '/scans/admin/analytics?key=' + encodeURIComponent(KEY);
+document.getElementById('jsonlink').onclick = function(e){e.preventDefault();var u=new URL(location);u.searchParams.set('format','json');location=u;};
+function toast(msg, ok){var t=document.getElementById('toast');t.textContent=msg;t.style.display='block';t.style.background=ok?'#052e16':'#450a0a';t.style.color=ok?'#22c55e':'#ef4444';t.style.border='1px solid '+(ok?'#166534':'#991b1b');setTimeout(function(){t.style.display='none'},3000);}
+async function cancelScan(id){if(!confirm('Cancel scan '+id.slice(0,8)+'?'))return;try{var r=await fetch('/scans/admin/cancel/'+id+'?key='+encodeURIComponent(KEY),{method:'POST'});var d=await r.json();if(r.ok){toast('Cancelling…',true);setTimeout(function(){location.reload()},2000);}else toast(d.detail||'Failed',false);}catch(e){toast('Error: '+e.message,false);}}
+setInterval(function(){if(document.getElementById('auto').checked)location.reload();},10000);
+</script>"""
+
+    body = (
+        '<header><div><h1><span class="n">null</span>scan scans</h1>'
+        '<div class="sub">live · auto-refresh 10s</div></div>'
+        '<div class="tools"><label class="sub"><input type="checkbox" id="auto" checked> auto</label>'
+        '<a class="btn" id="analytics" href="#">Analytics</a>'
+        '<a class="btn" id="jsonlink" href="#">JSON</a>'
+        '<button class="btn" onclick="location.reload()">Refresh</button></div></header>'
+        '<div class="kpis">'
+        f'<div class="kpi"><div class="v" style="color:#eab308">{summary.get("pending",0)}</div><div class="l">Pending</div></div>'
+        f'<div class="kpi"><div class="v" style="color:#06b6d4">{summary.get("running",0)}</div><div class="l">Running</div></div>'
+        f'<div class="kpi"><div class="v" style="color:#22c55e">{summary.get("completed",0)}</div><div class="l">Completed</div></div>'
+        f'<div class="kpi"><div class="v" style="color:#ef4444">{summary.get("failed",0)}</div><div class="l">Failed</div></div>'
+        f'<div class="kpi"><div class="v">{total}</div><div class="l">Total · last 100</div></div>'
+        '</div>'
+        '<div class="tablewrap"><table><thead><tr>'
+        '<th>Target</th><th>Status</th><th>Type</th><th>Tier</th><th>Cost</th>'
+        '<th>Started</th><th>Duration</th><th>Email</th><th>Actions</th>'
+        f'</tr></thead><tbody>{rows_html}</tbody></table></div>'
+        '<div id="toast" class="toast"></div>'
+    )
+
+    html = ("<!DOCTYPE html><html><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>Nullscan Scans</title>" + css + "</head><body>" + body + script + "</body></html>")
 
     from starlette.responses import HTMLResponse
     return HTMLResponse(content=html)
