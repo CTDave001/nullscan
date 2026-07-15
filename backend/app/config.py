@@ -15,9 +15,10 @@ class Settings(BaseSettings):
     # Model for the report-extraction step (OpenAI SDK, separate from the scan LLM). Kept on
     # gpt-5.2 by default; set REPORT_LLM=gpt-5.6-luna once that id is confirmed to cut cost.
     report_llm: str = "gpt-5.2"
-    # Route scans through the headless-CLI adapter (strix-agent >= 1.0). Default off until
-    # validated against a live 1.0.x + Docker host. See app/strix_adapter.py.
-    strix_use_cli: bool = False
+    # Route scans through the headless-CLI adapter (strix-agent >= 1.0). CUTOVER: ON — rides
+    # with the Dockerfile pin to 1.1.0 (both flip together). Override at runtime via env
+    # STRIX_USE_CLI. See app/strix_adapter.py and docs/STRIX_CUTOVER.md.
+    strix_use_cli: bool = True
 
     # Per-tier scan configuration
     tier_quick_llm: str = "openai/gpt-5.2"
