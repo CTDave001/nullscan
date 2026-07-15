@@ -776,22 +776,168 @@ async def admin_cancel_scan(scan_id: str, key: str = ""):
     return {"success": True, "message": f"Scan {scan_id} is being cancelled"}
 
 
-@router.get("/admin/analytics")
-async def admin_analytics(key: str = ""):
-    """First-party funnel + traffic-source analytics.
+_ANALYTICS_CSS = """<style>
+:root{--bg:#09090b;--surface:#18181b;--border:#27272a;--text:#fafafa;--muted:#a1a1aa;--dim:#71717a;--cyan:#06b6d4;--green:#22c55e;--red:#ef4444}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;max-width:1180px;margin:0 auto}
+.mono{font-family:'SF Mono',ui-monospace,Menlo,monospace}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+h1{font-size:19px;font-weight:700;letter-spacing:-.02em}
+h1 .n{color:var(--cyan)}
+.sub{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+.tools{display:flex;gap:8px;align-items:center}
+.btn{padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:none}
+.btn:hover{border-color:var(--cyan);color:var(--text)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:22px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+.kpi .v{font-size:28px;font-weight:700;font-family:'SF Mono',ui-monospace,monospace}
+.kpi .l{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin-bottom:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:720px){.grid2{grid-template-columns:1fr}.fstep{grid-template-columns:110px 1fr 48px}}
+.fstep{display:grid;grid-template-columns:150px 1fr 58px;align-items:center;gap:12px;margin-bottom:10px}
+.flabel{font-size:13px;color:var(--muted)}
+.fbarwrap{position:relative;background:var(--bg);border:1px solid var(--border);border-radius:6px;height:34px;overflow:hidden}
+.fbar{height:100%;background:linear-gradient(90deg,#0e7490,#06b6d4);border-radius:5px 0 0 5px}
+.fcount{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-family:'SF Mono',monospace;font-size:13px;font-weight:700}
+.fdrop{font-size:12px;color:var(--red);text-align:right;font-family:'SF Mono',monospace}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td{padding:7px 4px;border-bottom:1px solid var(--border);color:var(--muted)}
+td.num{text-align:right;font-family:'SF Mono',monospace;color:var(--text)}
+td.mono{font-family:'SF Mono',monospace;font-size:12px}
+th{text-align:left;padding:4px;font-size:10px;text-transform:uppercase;color:var(--dim);letter-spacing:.05em}
+th.num{text-align:right}
+.empty{color:var(--dim);text-align:center;padding:16px;font-size:12px}
+.hrow{display:grid;grid-template-columns:92px 1fr 42px;align-items:center;gap:10px;margin-bottom:9px}
+.hlabel{font-size:12px;color:var(--muted);text-transform:capitalize}
+.hbarwrap{background:var(--bg);border:1px solid var(--border);border-radius:5px;height:20px;overflow:hidden}
+.hbar{height:100%;border-radius:4px}
+.hnum{font-family:'SF Mono',monospace;font-size:12px;text-align:right}
+</style>"""
 
-    Answers two questions from our own data (no dependence on Google Analytics, which
-    dev audiences heavily block): where do scans come from, and where in the funnel do
-    people drop before buying.
+_ANALYTICS_SCRIPT = """<script>
+document.getElementById('jsonlink').onclick=function(e){e.preventDefault();var u=new URL(location);u.searchParams.set('format','json');location=u};
+setInterval(function(){if(document.getElementById('auto').checked)location.reload()},30000);
+</script>"""
+
+_FUNNEL_STEPS = [
+    ("Scan started", "scan_started"),
+    ("Results viewed", "results_viewed"),
+    ("Checkout opened", "checkout_opened"),
+    ("Tier selected", "checkout_tier_selected"),
+    ("Payment started", "payment_started"),
+    ("Payment succeeded", "payment_succeeded"),
+]
+
+
+def _render_analytics_html(data: dict) -> str:
+    import html as _h
+
+    def esc(x):
+        return _h.escape(str(x))
+
+    people = data["unique_people"]
+    total = data["total_scans"]
+    paid = data["paid_scans"]
+    rev = data["estimated_revenue_usd"]
+    conv = (paid / people * 100) if people else 0.0
+    status = data["status"]
+    scan_total = sum(status.values()) or 1
+    fail_rate = status.get("failed", 0) / scan_total * 100
+
+    funnel = data["funnel"]
+    top = max((funnel.get(k, 0) for _, k in _FUNNEL_STEPS), default=0) or 1
+    frows, prev = [], None
+    for label, k in _FUNNEL_STEPS:
+        n = funnel.get(k, 0)
+        w = max(n / top * 100, 1.5)
+        drop = "" if (prev is None or prev == 0) else f"−{round((prev - n) / prev * 100)}%"
+        frows.append(
+            f'<div class="fstep"><div class="flabel">{esc(label)}</div>'
+            f'<div class="fbarwrap"><div class="fbar" style="width:{w:.1f}%"></div>'
+            f'<span class="fcount">{n}</span></div><div class="fdrop">{drop}</div></div>'
+        )
+    funnel_html = "".join(frows)
+
+    srows = []
+    for src, v in list(data["by_source"].items())[:12]:
+        c = (v["paid"] / v["scans"] * 100) if v["scans"] else 0
+        srows.append(f'<tr><td>{esc(src)}</td><td class="num">{v["scans"]}</td>'
+                     f'<td class="num">{v["paid"]}</td><td class="num">{c:.0f}%</td></tr>')
+    src_html = "".join(srows) or '<tr><td class="empty" colspan="4">No scans yet</td></tr>'
+
+    health_colors = [("completed", "#22c55e"), ("failed", "#ef4444"), ("running", "#06b6d4"),
+                     ("pending", "#eab308"), ("cancelling", "#f97316")]
+    hrows = []
+    for st, color in health_colors:
+        n = status.get(st, 0)
+        if n == 0:
+            continue
+        hrows.append(f'<div class="hrow"><span class="hlabel">{st}</span>'
+                     f'<div class="hbarwrap"><div class="hbar" style="width:{n / scan_total * 100:.1f}%;background:{color}"></div></div>'
+                     f'<span class="hnum">{n}</span></div>')
+    health_html = "".join(hrows) or '<div class="empty">No scans yet</div>'
+
+    page_rows = "".join(f'<tr><td class="mono">{esc(p)}</td><td class="num">{n}</td></tr>'
+                        for p, n in list(data["top_pages"].items())[:12]) \
+        or '<tr><td class="empty" colspan="2">No pageviews yet</td></tr>'
+    click_rows = "".join(f'<tr><td>{esc(lbl)}</td><td class="num">{n}</td></tr>'
+                         for lbl, n in list(data["top_clicks"].items())[:12]) \
+        or '<tr><td class="empty" colspan="2">No clicks yet</td></tr>'
+
+    body = (
+        '<header><div><h1><span class="n">null</span>scan analytics</h1>'
+        '<div class="sub">first-party · auto-refresh 30s</div></div>'
+        '<div class="tools"><label class="sub"><input type="checkbox" id="auto" checked> auto</label>'
+        '<a class="btn" id="jsonlink" href="#">JSON</a>'
+        '<button class="btn" onclick="location.reload()">Refresh</button></div></header>'
+        '<div class="kpis">'
+        f'<div class="kpi"><div class="v">{people}</div><div class="l">Unique people</div></div>'
+        f'<div class="kpi"><div class="v">{total}</div><div class="l">Total scans</div></div>'
+        f'<div class="kpi"><div class="v">{paid}</div><div class="l">Paid</div></div>'
+        f'<div class="kpi"><div class="v" style="color:var(--cyan)">{conv:.1f}%</div><div class="l">Conversion</div></div>'
+        f'<div class="kpi"><div class="v">${rev:,}</div><div class="l">Revenue</div></div>'
+        '</div>'
+        f'<div class="card"><h2>Conversion funnel</h2>{funnel_html}</div>'
+        '<div class="grid2">'
+        '<div class="card"><h2>Traffic sources</h2><table>'
+        '<tr><th>Source</th><th class="num">Scans</th><th class="num">Paid</th><th class="num">Conv</th></tr>'
+        f'{src_html}</table></div>'
+        f'<div class="card"><h2>Scan health · {fail_rate:.0f}% fail</h2>{health_html}</div>'
+        '</div>'
+        '<div class="grid2">'
+        f'<div class="card"><h2>Top pages</h2><table>{page_rows}</table></div>'
+        f'<div class="card"><h2>Top clicked elements</h2><table>{click_rows}</table></div>'
+        '</div>'
+    )
+
+    return ("<!DOCTYPE html><html><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>Nullscan Analytics</title>" + _ANALYTICS_CSS + "</head><body>"
+            + body + _ANALYTICS_SCRIPT + "</body></html>")
+
+
+@router.get("/admin/analytics")
+async def admin_analytics(key: str = "", format: str = "html"):
+    """First-party funnel + traffic-source analytics dashboard.
+
+    HTML dashboard by default; `?format=json` returns the raw data. Answers, from our own
+    data (no dependence on ad-blocked Google Analytics): who converts, where they come from,
+    where in the funnel they drop, and how healthy scans are.
     """
     if not settings.admin_api_key or key != settings.admin_api_key:
         raise HTTPException(status_code=403, detail="Forbidden")
+
+    from collections import Counter
 
     all_scans = await database.fetch_all(scans.select())
     # Attribute on root scans only (child pro/deep scans inherit their parent's source).
     root_scans = [s for s in all_scans if not s["parent_scan_id"]]
     total_scans = len(root_scans)
     paid_scans = [s for s in all_scans if s["paid_tier"]]
+    unique_people = len({s["email"] for s in root_scans if s["email"]})
+    status_counts = Counter(s["status"] for s in all_scans)
 
     def _source(s) -> str:
         if s["utm_source"]:
@@ -812,15 +958,12 @@ async def admin_analytics(key: str = ""):
             entry["paid"] += 1
 
     # Funnel = distinct sessions that fired each event; plus raw autocapture aggregates.
-    from collections import Counter
     all_events = await database.fetch_all(events.select())
     funnel_sessions: dict[str, set] = {}
-    event_counts: Counter = Counter()
     page_counts: Counter = Counter()
     click_targets: Counter = Counter()
     for e in all_events:
         funnel_sessions.setdefault(e["name"], set()).add(e["session_id"])
-        event_counts[e["name"]] += 1
         if e["name"] == "pageview" and e["path"]:
             page_counts[e["path"]] += 1
         elif e["name"] == "click" and e["props_json"]:
@@ -836,14 +979,21 @@ async def admin_analytics(key: str = ""):
     revenue_by_tier = {"unlock": 39, "pro": 250, "deep": 899}
     revenue = sum(revenue_by_tier.get(s["paid_tier"], 0) for s in paid_scans)
 
-    return {
+    data = {
         "total_scans": total_scans,
+        "unique_people": unique_people,
         "paid_scans": len(paid_scans),
         "conversion_rate": round(len(paid_scans) / total_scans, 4) if total_scans else 0,
         "estimated_revenue_usd": revenue,
+        "status": dict(status_counts),
         "by_source": dict(sorted(by_source.items(), key=lambda kv: kv[1]["scans"], reverse=True)),
         "funnel": funnel,
-        "event_counts": dict(event_counts.most_common(25)),
         "top_pages": dict(page_counts.most_common(15)),
         "top_clicks": dict(click_targets.most_common(25)),
     }
+
+    if format == "json":
+        return data
+
+    from starlette.responses import HTMLResponse
+    return HTMLResponse(content=_render_analytics_html(data))
