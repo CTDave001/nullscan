@@ -443,7 +443,7 @@ export default function LandingPage() {
         {/* SEO Internal Links */}
         <section className="py-12 sm:py-16 px-4 sm:px-6 border-t" style={{ borderColor: "var(--border)" }}>
           <div className="max-w-5xl mx-auto">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               <a
                 href="/free-website-security-scanner"
                 className="group p-5 rounded-[var(--radius)] transition-all hover:border-[var(--cyan)]"
@@ -487,6 +487,21 @@ export default function LandingPage() {
                 </h3>
                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                   OWASP Top 10 coverage — SQL injection, XSS, auth bypass, SSRF, and more.
+                </p>
+              </a>
+              <a
+                href="/vibe-coding-security-scanner"
+                className="group p-5 rounded-[var(--radius)] transition-all hover:border-[var(--cyan)]"
+                style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}
+              >
+                <p className="font-mono text-[10px] uppercase tracking-wider mb-2" style={{ color: "var(--high)" }}>
+                  AI Apps
+                </p>
+                <h3 className="font-semibold text-sm mb-2" style={{ color: "var(--text)" }}>
+                  Vibe Coding Security Scanner
+                </h3>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  Built with Cursor, Lovable, Bolt, or v0? Scan your AI-built app for vulnerabilities.
                 </p>
               </a>
             </div>
