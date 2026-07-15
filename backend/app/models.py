@@ -7,6 +7,25 @@ class ScanCreate(BaseModel):
     email: EmailStr
     target_url: HttpUrl
     consent: bool
+    # Optional first-party attribution captured client-side
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
+    referrer: Optional[str] = None
+    landing_page: Optional[str] = None
+
+
+class EventCreate(BaseModel):
+    """A first-party funnel/analytics event sent from the frontend."""
+    session_id: str
+    name: str
+    scan_id: Optional[str] = None
+    props: Optional[dict] = None
+    path: Optional[str] = None
+    referrer: Optional[str] = None
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
 
 
 class ScanResponse(BaseModel):

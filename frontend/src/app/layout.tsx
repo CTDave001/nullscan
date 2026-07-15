@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AnalyticsProvider } from "@/components/analytics-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -119,6 +120,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased min-h-screen">
+        <AnalyticsProvider />
         {children}
       </body>
     </html>

@@ -21,6 +21,12 @@ scans = sqlalchemy.Table(
     sqlalchemy.Column("retry_count", sqlalchemy.Integer, default=0),
     sqlalchemy.Column("progress_json", sqlalchemy.Text, nullable=True),
     sqlalchemy.Column("parent_scan_id", sqlalchemy.String(36), nullable=True),
+    # First-party attribution — where this scan's visitor came from
+    sqlalchemy.Column("utm_source", sqlalchemy.String(255), nullable=True),
+    sqlalchemy.Column("utm_medium", sqlalchemy.String(255), nullable=True),
+    sqlalchemy.Column("utm_campaign", sqlalchemy.String(255), nullable=True),
+    sqlalchemy.Column("referrer", sqlalchemy.String(1024), nullable=True),
+    sqlalchemy.Column("landing_page", sqlalchemy.String(1024), nullable=True),
 )
 
 rate_limits = sqlalchemy.Table(
@@ -31,6 +37,24 @@ rate_limits = sqlalchemy.Table(
     sqlalchemy.Column("month", sqlalchemy.String(7)),  # YYYY-MM
 )
 
+# First-party funnel/analytics events. Written from the frontend via POST /events.
+# Robust against ad-blockers (which block Google Analytics for dev audiences).
+events = sqlalchemy.Table(
+    "events",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, autoincrement=True),
+    sqlalchemy.Column("session_id", sqlalchemy.String(64), index=True),
+    sqlalchemy.Column("scan_id", sqlalchemy.String(36), nullable=True, index=True),
+    sqlalchemy.Column("name", sqlalchemy.String(64), nullable=False, index=True),
+    sqlalchemy.Column("props_json", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("path", sqlalchemy.String(512), nullable=True),
+    sqlalchemy.Column("referrer", sqlalchemy.String(1024), nullable=True),
+    sqlalchemy.Column("utm_source", sqlalchemy.String(255), nullable=True),
+    sqlalchemy.Column("utm_medium", sqlalchemy.String(255), nullable=True),
+    sqlalchemy.Column("utm_campaign", sqlalchemy.String(255), nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, server_default=sqlalchemy.func.now()),
+)
+
 _connect_args = {}
 if settings.database_url.startswith("sqlite"):
     _connect_args["check_same_thread"] = False
@@ -38,10 +62,19 @@ if settings.database_url.startswith("sqlite"):
 engine = sqlalchemy.create_engine(settings.database_url, connect_args=_connect_args)
 metadata.create_all(engine)
 
-# Migrate existing DB: add parent_scan_id column if missing
+# Migrate existing DB: add columns if missing (idempotent — skips ones already present)
+_COLUMN_MIGRATIONS = [
+    "ALTER TABLE scans ADD COLUMN parent_scan_id VARCHAR(36)",
+    "ALTER TABLE scans ADD COLUMN utm_source VARCHAR(255)",
+    "ALTER TABLE scans ADD COLUMN utm_medium VARCHAR(255)",
+    "ALTER TABLE scans ADD COLUMN utm_campaign VARCHAR(255)",
+    "ALTER TABLE scans ADD COLUMN referrer VARCHAR(1024)",
+    "ALTER TABLE scans ADD COLUMN landing_page VARCHAR(1024)",
+]
 with engine.connect() as conn:
-    try:
-        conn.execute(sqlalchemy.text("ALTER TABLE scans ADD COLUMN parent_scan_id VARCHAR(36)"))
-        conn.commit()
-    except Exception:
-        pass  # Column already exists
+    for _stmt in _COLUMN_MIGRATIONS:
+        try:
+            conn.execute(sqlalchemy.text(_stmt))
+            conn.commit()
+        except Exception:
+            conn.rollback()  # Column already exists

@@ -1,11 +1,20 @@
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import database
-from app.routers import scans, webhooks
+from app.routers import scans, webhooks, events
 
-app = FastAPI(title="Nullscan API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await database.connect()
+    yield
+    await database.disconnect()
+
+
+app = FastAPI(title="Nullscan API", lifespan=lifespan)
 
 cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 if os.environ.get("ENV") != "production":
@@ -21,16 +30,7 @@ app.add_middleware(
 
 app.include_router(scans.router)
 app.include_router(webhooks.router)
-
-
-@app.on_event("startup")
-async def startup():
-    await database.connect()
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await database.disconnect()
+app.include_router(events.router)
 
 
 @app.get("/health")
