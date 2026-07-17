@@ -167,6 +167,12 @@ export default function ResultsPage() {
   const [expandedArea, setExpandedArea] = useState<number | null>(0)
   const [showPdfModal, setShowPdfModal] = useState(false)
   const [showCheckoutModal, setShowCheckoutModal] = useState(false)
+  // Promo token from a marketing drip link (?promo=) — applies the discounted unlock price.
+  const [promo, setPromo] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("promo")
+    if (p) setPromo(p)
+  }, [])
   const [checkoutTier, setCheckoutTier] = useState<"pro" | "deep" | undefined>(undefined)
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
@@ -1146,6 +1152,7 @@ export default function ResultsPage() {
           targetUrl={results.target_url}
           onSuccess={handleCheckoutSuccess}
           preselectedTier={checkoutTier}
+          promo={promo}
         />
       )}
 

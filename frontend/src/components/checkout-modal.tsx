@@ -22,7 +22,12 @@ interface CheckoutModalProps {
   targetUrl: string
   onSuccess: (childScanId?: string) => void
   preselectedTier?: "pro" | "deep"
+  /** Signed promo token from a marketing link — applies the discounted unlock price. */
+  promo?: string
 }
+
+// Discounted unlock price offered via the marketing drip (mirrors backend promo_price_unlock).
+const PROMO_UNLOCK_PRICE = 29
 
 interface TierOption {
   id: "unlock" | "pro" | "deep"
@@ -76,11 +81,15 @@ const TIERS: TierOption[] = [
 function CheckoutForm({
   scanId,
   tier,
+  price,
+  originalPrice,
   onSuccess,
   onBack,
 }: {
   scanId: string
   tier: TierOption
+  price: number
+  originalPrice?: number
   onSuccess: (childScanId?: string) => void
   onBack: () => void
 }) {
@@ -97,7 +106,7 @@ function CheckoutForm({
 
     setIsProcessing(true)
     setError(null)
-    track("payment_started", { tier: tier.id, price: tier.price }, scanId)
+    track("payment_started", { tier: tier.id, price }, scanId)
 
     const { error: submitError, paymentIntent } = await stripe.confirmPayment({
       elements,
@@ -128,7 +137,7 @@ function CheckoutForm({
 
         const data = await res.json()
         setSucceeded(true)
-        track("payment_succeeded", { tier: tier.id, price: tier.price }, scanId)
+        track("payment_succeeded", { tier: tier.id, price }, scanId)
         setTimeout(() => onSuccess(data.child_scan_id), 1500)
       } catch (err) {
         setError("Payment succeeded but failed to unlock. Please contact support.")
@@ -172,11 +181,21 @@ function CheckoutForm({
             {tier.name}
           </span>
           <span className="font-mono font-bold" style={{ color: "var(--text)" }}>
-            ${tier.price}
+            {originalPrice && originalPrice !== price ? (
+              <>
+                <span style={{ textDecoration: "line-through", color: "var(--text-dim)", marginRight: 6 }}>
+                  ${originalPrice}
+                </span>
+                ${price}
+              </>
+            ) : (
+              <>${price}</>
+            )}
           </span>
         </div>
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
           {tier.description}
+          {originalPrice && originalPrice !== price ? " · discount applied" : ""}
         </p>
       </div>
 
@@ -233,7 +252,7 @@ function CheckoutForm({
           ) : (
             <>
               <Lock className="w-4 h-4" />
-              Pay ${tier.price}
+              Pay ${price}
             </>
           )}
         </button>
@@ -254,7 +273,10 @@ export function CheckoutModal({
   targetUrl,
   onSuccess,
   preselectedTier,
+  promo,
 }: CheckoutModalProps) {
+  const priceFor = (t: TierOption) =>
+    promo && t.id === "unlock" ? PROMO_UNLOCK_PRICE : t.price
   const [selectedTier, setSelectedTier] = useState<TierOption | null>(null)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -277,7 +299,9 @@ export function CheckoutModal({
 
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/create-payment-intent?tier=${tier.id}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/create-payment-intent?tier=${tier.id}${
+          promo && tier.id === "unlock" ? `&promo=${encodeURIComponent(promo)}` : ""
+        }`,
         { method: "POST" }
       )
       if (!res.ok) {
@@ -408,7 +432,16 @@ export function CheckoutModal({
                       )}
                     </div>
                     <span className="font-mono text-lg font-bold" style={{ color: "var(--text)" }}>
-                      ${tier.price}
+                      {promo && tier.id === "unlock" ? (
+                        <>
+                          <span style={{ textDecoration: "line-through", color: "var(--text-dim)", fontSize: "0.8em", marginRight: 6 }}>
+                            ${tier.price}
+                          </span>
+                          ${PROMO_UNLOCK_PRICE}
+                        </>
+                      ) : (
+                        <>${tier.price}</>
+                      )}
                     </span>
                   </div>
                   <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
@@ -476,6 +509,8 @@ export function CheckoutModal({
               <CheckoutForm
                 scanId={scanId}
                 tier={selectedTier}
+                price={priceFor(selectedTier)}
+                originalPrice={selectedTier.price}
                 onSuccess={onSuccess}
                 onBack={handleBack}
               />

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import database
-from app.routers import scans, webhooks, events
+from app.routers import scans, webhooks, events, marketing
 
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ app.add_middleware(
 app.include_router(scans.router)
 app.include_router(webhooks.router)
 app.include_router(events.router)
+app.include_router(marketing.router)
 
 
 @app.get("/health")

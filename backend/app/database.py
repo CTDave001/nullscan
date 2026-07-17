@@ -55,6 +55,28 @@ events = sqlalchemy.Table(
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, server_default=sqlalchemy.func.now()),
 )
 
+# Emails that have unsubscribed from marketing. Checked before every drip send and honored
+# permanently. Transactional email (scan-complete, receipts) is NOT gated on this.
+email_suppressions = sqlalchemy.Table(
+    "email_suppressions",
+    metadata,
+    sqlalchemy.Column("email", sqlalchemy.String(255), primary_key=True),
+    sqlalchemy.Column("reason", sqlalchemy.String(64), nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, server_default=sqlalchemy.func.now()),
+)
+
+# One row per marketing email actually sent, keyed by (scan_id, step). Gives idempotency
+# (never send the same step twice) plus conversion analytics.
+drip_sends = sqlalchemy.Table(
+    "drip_sends",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, autoincrement=True),
+    sqlalchemy.Column("scan_id", sqlalchemy.String(36), index=True),
+    sqlalchemy.Column("email", sqlalchemy.String(255), index=True),
+    sqlalchemy.Column("step", sqlalchemy.Integer),
+    sqlalchemy.Column("sent_at", sqlalchemy.DateTime, server_default=sqlalchemy.func.now()),
+)
+
 _connect_args = {}
 if settings.database_url.startswith("sqlite"):
     _connect_args["check_same_thread"] = False

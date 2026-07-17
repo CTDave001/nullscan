@@ -35,6 +35,20 @@ class Settings(BaseSettings):
     # Admin API key for monitoring endpoints
     admin_api_key: str = ""
 
+    # ---- Marketing / drip re-engagement campaign ----
+    # Master kill switch. While False, the drip scheduler runs but sends NOTHING. Flip to True
+    # only after the go.nullscan.io sending domain is verified in Resend and a test send passes.
+    marketing_emails_enabled: bool = False
+    # Sender for marketing mail — a SEPARATE subdomain so a reputation dip here never drags down
+    # transactional email (receipts, scan-complete) sent from nullscan.io.
+    marketing_email_from: str = "Nullscan <hello@go.nullscan.io>"
+    # HMAC secret for signing unsubscribe + promo links. Falls back to the Stripe key if unset.
+    marketing_secret: str = ""
+    # Postal address for the CAN-SPAM footer (required by law on marketing email).
+    marketing_postal_address: str = "Nullscan"
+    # Discounted "unlock" price (cents) offered in the drip's step-3 email. Full price is $39.
+    promo_price_unlock: int = 2900
+
     # Per-tier cost limits (USD) — scan wraps up when exceeded
     tier_quick_cost_limit: float = 4.0
     tier_pro_cost_limit: float = 150.0

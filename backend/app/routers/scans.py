@@ -186,7 +186,7 @@ async def create_checkout(scan_id: str, tier: str):
 
 
 @router.post("/{scan_id}/create-payment-intent")
-async def create_payment_intent(scan_id: str, tier: str):
+async def create_payment_intent(scan_id: str, tier: str, promo: str = ""):
     """Create a PaymentIntent for custom checkout."""
     if not settings.stripe_secret_key:
         raise HTTPException(status_code=500, detail="Payment system not configured")
@@ -205,14 +205,22 @@ async def create_payment_intent(scan_id: str, tier: str):
     if current_rank >= new_rank and scan["paid_tier"]:
         raise HTTPException(status_code=400, detail="Already at this tier or higher")
 
+    # Apply the marketing drip's discounted unlock only when the signed token matches this exact
+    # scan+tier. Amount is computed server-side and stamped into metadata, so it can't be forged.
+    from app.marketing import verify_promo
+    amount = PRICE_TIERS[tier]
+    if tier == "unlock" and promo and verify_promo(scan_id, tier, promo):
+        amount = settings.promo_price_unlock
+
     # Create PaymentIntent
     try:
         intent = stripe.PaymentIntent.create(
-            amount=PRICE_TIERS[tier],
+            amount=amount,
             currency="usd",
             metadata={
                 "scan_id": scan_id,
                 "tier": tier,
+                "amount": str(amount),
             },
             receipt_email=scan["email"],
             automatic_payment_methods={
@@ -223,7 +231,7 @@ async def create_payment_intent(scan_id: str, tier: str):
 
         return {
             "client_secret": intent.client_secret,
-            "amount": PRICE_TIERS[tier],
+            "amount": amount,
         }
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -250,7 +258,10 @@ async def confirm_payment(scan_id: str, payment_intent_id: str, tier: str):
             raise HTTPException(status_code=400, detail="Payment mismatch")
         if intent.metadata.get("tier") != tier:
             raise HTTPException(status_code=400, detail="Tier mismatch")
-        if intent.amount != PRICE_TIERS[tier]:
+        allowed_amounts = {PRICE_TIERS[tier]}
+        if tier == "unlock":
+            allowed_amounts.add(settings.promo_price_unlock)  # drip discount
+        if intent.amount not in allowed_amounts:
             raise HTTPException(status_code=400, detail="Amount mismatch")
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e))

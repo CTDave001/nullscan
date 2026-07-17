@@ -1,6 +1,7 @@
 import asyncio
 import json
 import subprocess
+import time
 from datetime import datetime
 from urllib.parse import urlparse
 from app.database import database, scans
@@ -249,11 +250,22 @@ async def run_worker():
     await reset_stuck_scans()
     print("Worker started. Polling for scans...", flush=True)
 
+    last_drip = 0.0
+    DRIP_INTERVAL = 300  # run the marketing drip at most every 5 minutes
     while True:
         try:
             await process_pending_scans()
         except Exception as e:
             print(f"Worker error: {e}")
+
+        now = time.monotonic()
+        if now - last_drip >= DRIP_INTERVAL:
+            last_drip = now
+            try:
+                from app.drip import run_drip_tick
+                await run_drip_tick()
+            except Exception as e:
+                print(f"Drip error: {e}", flush=True)
 
         await asyncio.sleep(5)  # Poll every 5 seconds
 
