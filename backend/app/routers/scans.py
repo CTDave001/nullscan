@@ -835,6 +835,28 @@ async def admin_full_report(scan_id: str, key: str = ""):
     }
 
 
+@router.post("/admin/unlock/{scan_id}")
+async def admin_unlock_scan(scan_id: str, key: str = "", tier: str = "unlock"):
+    """Admin-only: mark a scan as paid so its /results page renders fully unlocked, with no
+    payment. Key-gated by admin_api_key and NOT public — a missing/empty admin key fails closed
+    (403). WARNING: anyone holding the admin key can grant free unlocks (a payment bypass), so
+    keep that key long, secret, and rotated.
+    """
+    if not settings.admin_api_key or key != settings.admin_api_key:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if tier not in ("unlock", "pro", "deep"):
+        raise HTTPException(status_code=400, detail="Invalid tier")
+
+    scan = await database.fetch_one(scans.select().where(scans.c.id == scan_id))
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    await database.execute(
+        scans.update().where(scans.c.id == scan_id).values(paid_tier=tier)
+    )
+    return {"success": True, "scan_id": scan_id, "paid_tier": tier}
+
+
 @router.post("/admin/cancel/{scan_id}")
 async def admin_cancel_scan(scan_id: str, key: str = ""):
     """Admin endpoint to cancel a running scan."""
