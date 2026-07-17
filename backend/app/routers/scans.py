@@ -418,7 +418,7 @@ async def get_scan_progress(scan_id: str):
 
 
 @router.get("/{scan_id}/results", response_model=ScanResults)
-async def get_scan_results(scan_id: str):
+async def get_scan_results(scan_id: str, key: str = ""):
     query = scans.select().where(scans.c.id == scan_id)
     scan = await database.fetch_one(query)
 
@@ -431,11 +431,16 @@ async def get_scan_results(scan_id: str):
             detail=f"Scan not completed. Status: {scan['status']}"
         )
 
-    # Check free scan expiration (30 days)
+    # Admins (holding the admin key) view ANY scan fully unlocked — WITHOUT changing the DB or
+    # what the public sees. Everyone else is filtered by the scan's real paid_tier.
+    is_admin = bool(settings.admin_api_key) and key == settings.admin_api_key
+    effective_tier = scan["paid_tier"] or ("unlock" if is_admin else None)
+
+    # Check free scan expiration (30 days) — admins bypass it.
     FREE_REPORT_TTL_DAYS = 30
     expired = False
     expires_in_days = None
-    if not scan["paid_tier"]:
+    if not scan["paid_tier"] and not is_admin:
         created = scan["created_at"]
         if created.tzinfo is None:
             created = created.replace(tzinfo=timezone.utc)
@@ -480,12 +485,12 @@ async def get_scan_results(scan_id: str):
         scan_id=scan_id,
         target_url=scan["target_url"],
         risk_level=risk_level,
-        findings=filter_findings_for_tier(findings, scan["paid_tier"]),
+        findings=filter_findings_for_tier(findings, effective_tier),
         scan_type=result_source["scan_type"],
         completed_at=result_source["completed_at"],
-        paid_tier=scan["paid_tier"],
+        paid_tier=effective_tier,
         structured_report=filter_structured_report_for_tier(
-            structured_report, scan["paid_tier"]
+            structured_report, effective_tier
         ),
         expires_in_days=expires_in_days,
     )
@@ -844,17 +849,20 @@ async def admin_unlock_scan(scan_id: str, key: str = "", tier: str = "unlock"):
     """
     if not settings.admin_api_key or key != settings.admin_api_key:
         raise HTTPException(status_code=403, detail="Forbidden")
-    if tier not in ("unlock", "pro", "deep"):
+    if tier not in ("unlock", "pro", "deep", "free", "lock"):
         raise HTTPException(status_code=400, detail="Invalid tier")
 
     scan = await database.fetch_one(scans.select().where(scans.c.id == scan_id))
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
 
+    # "free"/"lock" re-locks a scan (paid_tier -> NULL). Note: this makes the report public to
+    # anyone with the link. For admin-only viewing, use GET /scans/{id}/results?key=<admin_key>.
+    new_tier = None if tier in ("free", "lock") else tier
     await database.execute(
-        scans.update().where(scans.c.id == scan_id).values(paid_tier=tier)
+        scans.update().where(scans.c.id == scan_id).values(paid_tier=new_tier)
     )
-    return {"success": True, "scan_id": scan_id, "paid_tier": tier}
+    return {"success": True, "scan_id": scan_id, "paid_tier": new_tier}
 
 
 @router.post("/admin/cancel/{scan_id}")

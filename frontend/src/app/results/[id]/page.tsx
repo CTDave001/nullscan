@@ -153,6 +153,13 @@ export default function ResultsPage() {
   const router = useRouter()
   const scanId = params.id as string
 
+  // Admin view: if ?key=<admin_key> is in the URL, forward it so the API returns the fully
+  // unlocked report. Public visitors (no key) still get the tier-locked view.
+  const resultsUrl = () => {
+    const k = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("key") : null
+    return `${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/results${k ? `?key=${encodeURIComponent(k)}` : ""}`
+  }
+
   const [results, setResults] = useState<ScanResults | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -175,7 +182,7 @@ export default function ResultsPage() {
     const fetchResults = async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/results`
+          resultsUrl()
         )
         if (!res.ok) {
           const data = await res.json()
@@ -213,7 +220,7 @@ export default function ResultsPage() {
         if (metaRes.ok) {
           const meta = await metaRes.json()
           if (meta.paid_tier) {
-            const rres = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/results`)
+            const rres = await fetch(resultsUrl())
             if (rres.ok && !cancelled) setResults(await rres.json())
             if (!cancelled) {
               setReconciling(false)
@@ -251,7 +258,7 @@ export default function ResultsPage() {
           // Auto-refresh results when child scan completes
           if (data.has_child && data.status === "completed") {
             const resultsRes = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/results`
+              resultsUrl()
             )
             if (resultsRes.ok) {
               setResults(await resultsRes.json())
