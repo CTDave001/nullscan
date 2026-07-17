@@ -521,8 +521,8 @@ async def get_child_scan_status(scan_id: str):
 
 
 @router.post("/{scan_id}/send-pdf")
-async def send_pdf_report(scan_id: str):
-    """Send PDF report to user's email (paid users only)."""
+async def send_pdf_report(scan_id: str, key: str = ""):
+    """Send PDF report to user's email (paid users, or admin via ?key=)."""
     from app.email_service import send_pdf_report_email
 
     query = scans.select().where(scans.c.id == scan_id)
@@ -537,25 +537,28 @@ async def send_pdf_report(scan_id: str):
             detail=f"Scan not completed. Status: {scan['status']}"
         )
 
-    if not scan["paid_tier"]:
+    is_admin = bool(settings.admin_api_key) and key == settings.admin_api_key
+    if not scan["paid_tier"] and not is_admin:
         raise HTTPException(
             status_code=403,
             detail="PDF reports are only available for paid scans"
         )
 
-    # Send the email with PDF
+    # Send the email with the report links. For an admin-triggered send on an otherwise-locked
+    # scan, pass the key through so the emailed links resolve to the unlocked report.
     await send_pdf_report_email(
         email=scan["email"],
         scan_id=scan_id,
         target_url=scan["target_url"],
+        admin_key=key if is_admin else "",
     )
 
     return {"success": True, "message": "PDF report sent to your email"}
 
 
 @router.get("/{scan_id}/download-pdf")
-async def download_pdf_report(scan_id: str):
-    """Download PDF report (paid users only)."""
+async def download_pdf_report(scan_id: str, key: str = ""):
+    """Download PDF report (paid users, or admin via ?key=)."""
     query = scans.select().where(scans.c.id == scan_id)
     scan = await database.fetch_one(query)
 
@@ -565,7 +568,8 @@ async def download_pdf_report(scan_id: str):
     if scan["status"] != "completed":
         raise HTTPException(status_code=400, detail="Scan not completed")
 
-    if not scan["paid_tier"]:
+    is_admin = bool(settings.admin_api_key) and key == settings.admin_api_key
+    if not scan["paid_tier"] and not is_admin:
         raise HTTPException(status_code=403, detail="PDF reports are only available for paid scans")
 
     # Get results (check for child scan results like the results endpoint)
@@ -593,7 +597,7 @@ async def download_pdf_report(scan_id: str):
         "id": scan_id,
         "target_url": scan["target_url"],
         "email": scan["email"],
-        "paid_tier": scan["paid_tier"],
+        "paid_tier": scan["paid_tier"] or ("unlock" if is_admin else None),
         "scan_type": result_source["scan_type"],
         "created_at": str(scan["created_at"]),
         "completed_at": str(result_source["completed_at"]),

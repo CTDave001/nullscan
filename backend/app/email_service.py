@@ -128,12 +128,14 @@ async def send_payment_received_email(email: str, scan_id: str, tier: str):
         logger.error(f"Failed to send payment received email to {email}: {e}")
 
 
-async def send_pdf_report_email(email: str, scan_id: str, target_url: str):
-    """Send PDF report to user's email."""
+async def send_pdf_report_email(email: str, scan_id: str, target_url: str, admin_key: str = ""):
+    """Send PDF report to user's email. When admin_key is set (admin-triggered send on an
+    otherwise-locked scan), it is appended to the report links so they resolve unlocked."""
     if not settings.resend_api_key:
         print(f"[DEV] Would send PDF report email to {email}")
         return
 
+    q = f"?key={admin_key}" if admin_key else ""
     try:
         resend.Emails.send({
             "from": settings.email_from,
@@ -162,13 +164,13 @@ async def send_pdf_report_email(email: str, scan_id: str, target_url: str):
                     </ul>
                 </div>
 
-                <a href="{settings.frontend_url}/results/{scan_id}"
+                <a href="{settings.frontend_url}/results/{scan_id}{q}"
                    style="display: inline-block; background: #06b6d4; color: #09090b; padding: 12px 24px;
                           text-decoration: none; border-radius: 6px; font-weight: 600; margin-top: 16px;">
                     View Online Report
                 </a>
 
-                <a href="{settings.api_url}/scans/{scan_id}/download-pdf"
+                <a href="{settings.api_url}/scans/{scan_id}/download-pdf{q}"
                    style="display: inline-block; background: #27272a; color: #06b6d4; padding: 12px 24px;
                           text-decoration: none; border-radius: 6px; font-weight: 600; margin-top: 12px; margin-left: 12px;
                           border: 1px solid #06b6d4;">

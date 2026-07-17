@@ -309,8 +309,9 @@ export default function ResultsPage() {
   const handleSendPdf = async () => {
     setSendingEmail(true)
     try {
+      const k = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("key") : null
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/send-pdf`,
+        `${process.env.NEXT_PUBLIC_API_URL}/scans/${scanId}/send-pdf${k ? `?key=${encodeURIComponent(k)}` : ""}`,
         { method: "POST" }
       )
       if (!res.ok) throw new Error("Failed to send PDF")
